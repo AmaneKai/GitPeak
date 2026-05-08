@@ -71,14 +71,39 @@ export function useLanguagePie(getLanguages: () => GitHubLanguage[]) {
   const isMobile = typeof window !== "undefined" && window.innerWidth < 640
   const dims     = getDims(isMobile)
 
-  let hovered    = $state<number | null>(null)
-  const slices   = $derived(buildSlices(getLanguages()))
+  let hovered  = $state<number | null>(null)
+  let sweepDeg = $state(-90)
+  const slices = $derived(buildSlices(getLanguages()))
+
+  $effect(() => {
+    const DURATION = 1200
+    const start    = performance.now()
+    let raf: number
+
+    function tick(now: number) {
+      const t     = Math.min((now - start) / DURATION, 1)
+      // ease-out cubic: fast start, gentle finish
+      const eased = 1 - Math.pow(1 - t, 3)
+      sweepDeg    = -90 + eased * 360
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  })
+
+  const animatedSlices = $derived(
+    slices
+      .filter(s => sweepDeg > s.startDeg)
+      .map(s => ({ ...s, endDeg: Math.min(s.endDeg, sweepDeg) }))
+  )
 
   return {
     dims,
-    get hovered() { return hovered },
-    get slices()  { return slices  },
-    onEnter(i: number) { hovered = i    },
-    onLeave()          { hovered = null },
+    get hovered()        { return hovered       },
+    get slices()         { return slices         },
+    get animatedSlices() { return animatedSlices },
+    onEnter(i: number)   { hovered = i    },
+    onLeave()            { hovered = null },
   }
 }

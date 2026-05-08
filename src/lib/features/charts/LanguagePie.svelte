@@ -65,7 +65,7 @@
             stroke-width={R_OUTER - R_INNER + 1}
           />
 
-          {#each pie.slices as slice, i}
+          {#each pie.animatedSlices as slice, i}
             {@const off = pie.hovered === i ? segOffset(slice) : { x: 0, y: 0 }}
             <path
               d={arcPath(CX, CY, R_OUTER, R_INNER, slice.startDeg, slice.endDeg, off.x, off.y)}
@@ -128,7 +128,7 @@
           <li
             class="lang-row"
             class:active
-            style="background:{active ? `${slice.color}12` : 'transparent'};"
+            style="background:{active ? `${slice.color}12` : 'transparent'};animation-delay:{i * 70 + 200}ms;"
             onmouseenter={() => pie.onEnter(i)}
             onmouseleave={pie.onLeave}
             ontouchstart={() => pie.onEnter(i)}
@@ -199,6 +199,11 @@
     border-radius: 99px;
   }
 
+  @keyframes row-in {
+    from { opacity: 0; transform: translateX(-10px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
   .lang-row {
     display: flex;
     align-items: center;
@@ -209,6 +214,7 @@
     user-select: none;
     transition: background 0.13s ease, transform 0.13s ease;
     touch-action: manipulation;
+    animation: row-in 0.4s ease backwards;
   }
   .lang-row:hover,
   .lang-row.active { transform: translateX(3px); }
