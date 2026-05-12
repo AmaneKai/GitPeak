@@ -47,9 +47,12 @@
 		"vite": "^7.3.1"
 	},
 	"dependencies": {
+		"@resvg/resvg-js": "^2.6.2",
 		"chart.js": "^4.5.1",
 		"html-to-image": "^1.11.13",
 		"lucide-svelte": "^1.0.1",
+		"satori": "^0.26.0",
+		"satori-html": "^0.3.2",
 		"vanilla-colorful": "^0.7.2"
 	}
 }

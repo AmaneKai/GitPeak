@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { page }             from "$app/stores"
   import { useSearch }        from "$lib/features/search/useSearch.svelte"
   import SearchBar            from "$lib/features/search/SearchBar.svelte"
   import EmptyState           from "$lib/features/search/EmptyState.svelte"
@@ -13,7 +14,35 @@
 
   const search = useSearch()
   let showExporter = $state(false)
+
+  // 1. Grab username from URL (if any)
+  let urlUsername = $derived($page.url.searchParams.get('username'));
+
+  // 2. Auto-trigger search if there's a username in the URL
+  $effect(() => {
+    if (urlUsername && !search.searched && !search.loading) {
+      search.onSearch(urlUsername);
+    }
+  });
 </script>
+
+<svelte:head>
+  {#if urlUsername}
+    <title>{urlUsername}'s GitHub Stats | GitPeek</title>
+    <meta property="og:title" content="{urlUsername}'s GitHub Stats | GitPeek" />
+    <meta property="og:description" content="Peek at {urlUsername}'s GitHub profile stats, languages, and top repositories." />
+    <meta property="og:image" content="{$page.url.origin}/og?username={urlUsername}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{urlUsername}'s GitHub Stats | GitPeek" />
+    <meta name="twitter:image" content="{$page.url.origin}/og?username={urlUsername}" />
+  {:else}
+    <title>GitPeek — Peek at any GitHub profile, beautifully</title>
+    <meta property="og:title" content="GitPeek — Peek at any GitHub profile, beautifully" />
+    <meta property="og:image" content="{$page.url.origin}/favicon.svg" />
+  {/if}
+</svelte:head>
 
 <div class="aurora-bg" aria-hidden="true"></div>
 
