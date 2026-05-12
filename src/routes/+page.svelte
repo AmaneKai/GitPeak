@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page }             from "$app/stores"
+  import { goto }             from "$app/navigation"
   import { useSearch }        from "$lib/features/search/useSearch.svelte"
   import SearchBar            from "$lib/features/search/SearchBar.svelte"
   import EmptyState           from "$lib/features/search/EmptyState.svelte"
@@ -15,15 +16,18 @@
   const search = useSearch()
   let showExporter = $state(false)
 
-  // 1. Grab username from URL (if any)
   let urlUsername = $derived($page.url.searchParams.get('username'));
 
-  // 2. Auto-trigger search if there's a username in the URL
   $effect(() => {
-    if (urlUsername && !search.searched && !search.loading) {
+    if (urlUsername && urlUsername !== search.currentUsername && !search.loading) {
       search.onSearch(urlUsername);
     }
   });
+
+  function handleSearchSubmit(username: string) {
+    goto(`/?username=${encodeURIComponent(username)}`, { keepFocus: true, noScroll: true });
+    search.onSearch(username);
+  }
 </script>
 
 <svelte:head>
@@ -31,12 +35,13 @@
     <title>{urlUsername}'s GitHub Stats | GitPeek</title>
     <meta property="og:title" content="{urlUsername}'s GitHub Stats | GitPeek" />
     <meta property="og:description" content="Peek at {urlUsername}'s GitHub profile stats, languages, and top repositories." />
-    <meta property="og:image" content="{$page.url.origin}/og?username={urlUsername}" />
+    <!-- Cache bust version added here (&v=1) -->
+    <meta property="og:image" content="{$page.url.origin}/og?username={urlUsername}&v=1" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="{urlUsername}'s GitHub Stats | GitPeek" />
-    <meta name="twitter:image" content="{$page.url.origin}/og?username={urlUsername}" />
+    <meta name="twitter:image" content="{$page.url.origin}/og?username={urlUsername}&v=1" />
   {:else}
     <title>GitPeek — Peek at any GitHub profile, beautifully</title>
     <meta property="og:title" content="GitPeek — Peek at any GitHub profile, beautifully" />
@@ -74,7 +79,8 @@
   </header>
 
   <div class="fade-in-up w-full flex justify-center px-2" style="animation-delay:80ms">
-    <SearchBar onSearch={search.onSearch} />
+    <!-- 4. Pass our new handler to the search bar -->
+    <SearchBar onSearch={handleSearchSubmit} />
   </div>
 
   {#if search.loading}
