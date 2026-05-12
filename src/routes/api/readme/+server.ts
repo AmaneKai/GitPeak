@@ -223,7 +223,7 @@ export async function GET({ url }: { url: URL }) {
   return new Response(svg, {
     headers: {
       'Content-Type': 'image/svg+xml',
-      'Cache-Control': 'public, max-age=7200, stale-while-revalidate=86400'
+      'Cache-Control': 'public, max-age=86400, stale-while-revalidate=86400'
     }
   })
 }
