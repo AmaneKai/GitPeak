@@ -1,6 +1,7 @@
 import { fetchStats } from '$lib/utils/api'
 import { formatNumber } from '$lib/utils/format'
 import { PRESET_THEMES } from '$lib/utils/theme'
+import { arcPath } from '$lib/features/charts/useLanguagePie.svelte'
 
 interface Language { name: string; percentage: number }
 interface TopRepo { name: string; stars: number }
@@ -11,23 +12,27 @@ interface GithubStats {
 }
 interface DonutSlice extends Language { color: string; startDeg: number; endDeg: number }
 type Theme = Record<string, string>
+type NameLayout = { fontSize: number; lines: string[] }
 
 const ACCENTS = ['foam', 'iris', 'gold', 'love', 'rose', 'pine'] as const
 
 let cachedMono = ''
 let cachedSerif = ''
 
-async function fetchBase64(url: string | null | undefined) {
-  if (!url) return ''
+async function fetchBase64(url: string | null | undefined): Promise<string> {
+  if (!url) 
+    return ''
+
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(3000) })
+
+    if (!res.ok) 
+      return ''
+
     const buf = await res.arrayBuffer()
-    const bytes = new Uint8Array(buf)
-    let binary = ''
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i])
-    }
-    return btoa(binary)
+    const base64 = Buffer.from(buf).toString('base64')
+
+    return base64
   } catch {
     return ''
   }
@@ -37,42 +42,29 @@ async function loadFontB64(family: string, weight: number) {
   const fam = family.replace(/ /g, '+')
   const url = `https://fonts.googleapis.com/css2?family=${fam}:wght@${weight}&display=swap`
   const ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_6_8)'
+
   try {
     const css = await fetch(url, { headers: { 'User-Agent': ua } }).then((r) => r.text())
     const match = css.match(/src: url\((.+?)\) format\('(opentype|truetype)'\)/)
+
     return match ? fetchBase64(match[1]) : ''
   } catch {
     return ''
   }
 }
 
-function polar(cx: number, cy: number, r: number, deg: number) {
-  const rad = (deg * Math.PI) / 180
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) }
-}
-
-function donutArcPath(cx: number, cy: number, ro: number, ri: number, s: number, e: number) {
-  const end = Math.min(e, s + 359.9)
-  const la = end - s > 180 ? 1 : 0
-  const o1 = polar(cx, cy, ro, s)
-  const o2 = polar(cx, cy, ro, end)
-  const i1 = polar(cx, cy, ri, end)
-  const i2 = polar(cx, cy, ri, s)
-  return [
-    `M ${o1.x} ${o1.y}`, `A ${ro} ${ro} 0 ${la} 1 ${o2.x} ${o2.y}`,
-    `L ${i1.x} ${i1.y}`, `A ${ri} ${ri} 0 ${la} 0 ${i2.x} ${i2.y} Z`
-  ].join(' ')
-}
-
 function buildDonutSlices(langs: Language[], theme: Theme): DonutSlice[] {
   let cur = -90
+
   return langs.map((lang, i) => {
     const pct = Math.max(0, Math.min(100, lang.percentage ?? 0))
     const span = (pct / 100) * 360
     const startDeg = cur + 1.5
     const endDeg = cur + span - 1.5
+
     cur += span
     const key = ACCENTS[i % ACCENTS.length]
+
     return { ...lang, percentage: pct, color: theme[key], startDeg, endDeg }
   })
 }
@@ -86,13 +78,13 @@ function svgDefs(mono: string, serif: string, theme: Theme) {
         .text-main { font-family: 'JetBrains Mono', 'Noto Sans JP', monospace; fill: ${theme.text}; }
         .text-serif { font-family: 'Instrument Serif', 'Noto Sans JP', serif; fill: ${theme.text}; }
         .text-subtle { font-family: 'JetBrains Mono', monospace; fill: ${theme.subtle}; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; }
-        @keyframes up { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes scaleIn { from { opacity: 0; transform: scale(0.8) rotate(-10deg); } to { opacity: 1; transform: scale(1) rotate(0deg); } }
-        @keyframes stretch { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-        .stagger { opacity: 0; animation: up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes growX { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+        .stagger { opacity: 0; animation: fadeUp 0.6s ease-out forwards; }
         .delay-1 { animation-delay: 0.1s; } .delay-2 { animation-delay: 0.2s; } .delay-3 { animation-delay: 0.3s; } .delay-4 { animation-delay: 0.4s; }
-        .slice { transform-origin: 728px 170px; opacity: 0; animation: scaleIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .bar-fill { transform-origin: left center; animation: stretch 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .slice { opacity: 0; animation: fadeIn 0.5s ease-out forwards; }
+        .bar-fill { transform-origin: left center; animation: growX 0.8s ease-out forwards; }
       </style>
       <radialGradient id="aurora-p" cx="20%" cy="0%" r="60%">
         <stop offset="0%" stop-color="${theme.iris}" stop-opacity="0.15" />
@@ -102,27 +94,71 @@ function svgDefs(mono: string, serif: string, theme: Theme) {
         <stop offset="0%" stop-color="${theme.foam}" stop-opacity="0.12" />
         <stop offset="100%" stop-color="${theme.base}" stop-opacity="0" />
       </radialGradient>
-      <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
-        <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#000" flood-opacity="0.45" />
+      <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="12" result="blur" />
+        <feOffset in="blur" dx="0" dy="8" result="offsetBlur" />
+        <feFlood flood-color="#000" flood-opacity="0.35" result="color" />
+        <feComposite in="color" in2="offsetBlur" operator="in" result="shadow" />
+        <feMerge>
+          <feMergeNode in="shadow" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
       </filter>
-      <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-        <feGaussianBlur stdDeviation="4" result="blur" />
-        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+      <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="3" result="blur" />
+        <feMerge>
+          <feMergeNode in="blur" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
       </filter>
-      <clipPath id="av-clip"><rect x="40" y="40" width="80" height="80" rx="20" /></clipPath>
       <clipPath id="do-clip"><circle cx="728" cy="170" r="48" /></clipPath>
       <clipPath id="rp-clip"><rect x="40" y="420" width="464" height="72" rx="16" /></clipPath>
     </defs>`
 }
 
-function svgProfile(stats: GithubStats, username: string, avatar: string, theme: Theme) {
+function getNameLayout(name: string): NameLayout {
+  const chars = [...name]
+  const len = chars.length
+
+  switch (true) {
+    case len <= 15: return { fontSize: 46, lines: [name] }
+    case len <= 25: return { fontSize: 36, lines: [name] }
+    case len <= 35: return { fontSize: 28, lines: [name] }
+    default: {
+      const mid = Math.ceil(len / 2)
+      return {
+        fontSize: 22,
+        lines: [chars.slice(0, mid).join(''), chars.slice(mid).join('')]
+      }
+    }
+  }
+}
+
+function getNameY(fontSize: number, multiline: boolean): { y1: number; y2: number; usernameY: number } {
+  if (multiline) 
+    return { y1: 70, y2: 70 + fontSize + 4, usernameY: 70 + fontSize + 4 + 24 }
+
+  const offsets: Record<number, [number, number]> = {
+    46: [75, 102],
+    36: [78, 104],
+    28: [76, 102],
+    22: [74, 100],
+  }
+  const [y1, usernameY] = offsets[fontSize]
+
+  return { y1, y2: 0, usernameY }
+}
+
+function svgProfile(stats: GithubStats, username: string, theme: Theme) {
   const name = stats.displayName || username
+  const { fontSize, lines } = getNameLayout(name)
+  const { y1, y2, usernameY } = getNameY(fontSize, lines.length > 1)
+
   return `
     <g class="stagger delay-1">
-      ${avatar ? `<image href="data:image/png;base64,${avatar}" x="40" y="40" width="80" height="80" clip-path="url(#av-clip)" filter="url(#shadow)" />` : ''}
-      <rect x="40" y="40" width="80" height="80" rx="20" fill="${avatar ? 'none' : theme.overlay}" stroke="${theme.iris}" stroke-opacity="0.3" stroke-width="2" />
-      <text x="144" y="85" class="text-serif" font-size="46">${name}</text>
-      <text x="144" y="112" class="text-main" fill="${theme.subtle}" font-size="15">@${username}</text>
+      ${lines[0] ? `<text x="40" y="${y1}" class="text-serif" font-size="${fontSize}">${lines[0]}</text>` : ''}
+      ${lines[1] ? `<text x="40" y="${y2}" class="text-serif" font-size="${fontSize}">${lines[1]}</text>` : ''}
+      <text x="40" y="${usernameY}" class="text-main" fill="${theme.subtle}" font-size="15">@${username}</text>
     </g>`
 }
 
@@ -158,7 +194,7 @@ function svgTopRepo(repo: TopRepo | null, theme: Theme) {
 }
 
 function svgLangPanel(slices: DonutSlice[], total: number, avatar: string, theme: Theme) {
-  const paths = slices.map((s, i) => `<path d="${donutArcPath(728, 170, 75, 57, s.startDeg, s.endDeg)}" fill="${s.color}" class="slice" style="animation-delay:${0.4 + i * 0.08}s"/>`).join('')
+  const paths = slices.map((s, i) => `<path d="${arcPath(728, 170, 75, 57, s.startDeg, s.endDeg)}" fill="${s.color}" class="slice" style="animation-delay:${0.4 + i * 0.08}s"/>`).join('')
   const bars = slices.slice(0, 5).map((s, i) => `
       <circle cx="572" cy="${296 + i * 30}" r="4" fill="${s.color}" />
       <text x="588" y="${300 + i * 30}" class="text-main" font-size="12">${s.name}</text>
@@ -185,14 +221,16 @@ function svgLangPanel(slices: DonutSlice[], total: number, avatar: string, theme
 
 export async function GET({ url }: { url: URL }) {
   const username = url.searchParams.get('username')?.trim()
-  if (!username) return new Response('Missing username', { status: 400 })
+  if (!username) 
+    return new Response('Missing username', { status: 400 })
 
-  // GET THEME FROM URL
   const requestedTheme = url.searchParams.get('theme') || 'Rosé Pine'
   const theme = PRESET_THEMES[requestedTheme] || PRESET_THEMES['Rosé Pine']
 
   const res = await fetchStats(username)
-  if (!res.ok) return new Response('User not found', { status: 404 })
+  if (!res.ok) 
+    return new Response('User not found', { status: 404 })
+
   const stats = res.data as GithubStats
   stats.languages = Array.isArray(stats.languages) ? stats.languages : []
 
@@ -214,7 +252,7 @@ export async function GET({ url }: { url: URL }) {
       <rect width="960" height="520" fill="${theme.base}" rx="20" />
       <rect width="960" height="520" fill="url(#aurora-p)" rx="20" />
       <rect width="960" height="520" fill="url(#aurora-b)" rx="20" />
-      ${svgProfile(stats, username, avatarB64, theme)}
+      ${svgProfile(stats, username, theme)}
       ${svgStatGrid(stats, theme)}
       ${svgTopRepo(stats.mostStarredRepo, theme)}
       ${svgLangPanel(slices, stats.languages.length, avatarB64, theme)}
