@@ -1,6 +1,6 @@
 # GitPeek
 
-A web application for viewing public GitHub profile statistics. Enter any GitHub username and get 
+A web application for viewing public GitHub profile statistics. Enter any GitHub username and get
 an instant overview of their activity, languages, repositories, and contribution history.
 
 Live at [gitpk.vercel.app](https://gitpk.vercel.app)
@@ -20,24 +20,24 @@ Live at [gitpk.vercel.app](https://gitpk.vercel.app)
 
 ## Add to your GitHub README
 
-You can embed your GitPeek dashboard directly into your GitHub profile `README.md`! It generates 
+You can embed your GitPeek dashboard directly into your GitHub profile `README.md`! It generates
 an animated, auto-updating SVG of your GitHub stats.
 
-Just copy and paste this code into your README, and replace `YOUR_USERNAME` with your actual 
+Just copy and paste this code into your README, and replace `YOUR_USERNAME` with your actual
 GitHub username:
 
 ```html
 <div align="center">
-  <a href="https://gitpk.vercel.app/?username=YOUR_USERNAME">
-    <img src="https://gitpk.vercel.app/api/readme?username=YOUR_USERNAME" alt="My GitHub Stats" />
-  </a>
+	<a href="https://gitpk.vercel.app/?username=YOUR_USERNAME">
+		<img src="https://gitpk.vercel.app/api/readme?username=YOUR_USERNAME" alt="My GitHub Stats" />
+	</a>
 </div>
 ```
 
 ### Themes
 
-GitPeek supports 8 built-in themes. To change the look of your README card, simply add 
-`&theme=Theme+Name` to the end of the image URL. 
+GitPeek supports 8 built-in themes. To change the look of your README card, simply add
+`&theme=Theme+Name` to the end of the image URL.
 
 For example, to use the **Catppuccin Mocha** theme:
 
@@ -46,7 +46,8 @@ For example, to use the **Catppuccin Mocha** theme:
 ```
 
 **Available Themes:**
-- `Rosé+Pine` *(Default)*
+
+- `Rosé+Pine` _(Default)_
 - `Rosé+Pine+Moon`
 - `Rosé+Pine+Dawn`
 - `Catppuccin+Mocha`
@@ -59,14 +60,14 @@ For example, to use the **Catppuccin Mocha** theme:
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Framework | [SvelteKit](https://kit.svelte.dev/) |
-| Components | [shadcn-svelte](https://www.shadcn-svelte.com/) |
-| Headless UI | [bits-ui](https://www.bits-ui.com/) |
-| Styling | [Tailwind CSS](https://tailwindcss.com/) |
-| Icons | [Lucide](https://lucide.dev/) |
-| Backend | Cloudflare Worker proxying GitHub's GraphQL API |
+| Layer       | Technology                                      |
+| ----------- | ----------------------------------------------- |
+| Framework   | [SvelteKit](https://kit.svelte.dev/)            |
+| Components  | [shadcn-svelte](https://www.shadcn-svelte.com/) |
+| Headless UI | [bits-ui](https://www.bits-ui.com/)             |
+| Styling     | [Tailwind CSS](https://tailwindcss.com/)        |
+| Icons       | [Lucide](https://lucide.dev/)                   |
+| Backend     | Cloudflare Worker proxying GitHub's GraphQL API |
 
 ---
 

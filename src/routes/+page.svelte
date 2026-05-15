@@ -1,160 +1,176 @@
 <script lang="ts">
-  import { page }             from "$app/stores"
-  import { goto }             from "$app/navigation"
-  import { useSearch }        from "$lib/features/search/useSearch.svelte"
-  import SearchBar            from "$lib/features/search/SearchBar.svelte"
-  import EmptyState           from "$lib/features/search/EmptyState.svelte"
-  import ProfileCard          from "$lib/features/profile/ProfileCard.svelte"
-  import StatGrid             from "$lib/features/stats/StatGrid.svelte"
-  import LanguagePie          from "$lib/features/charts/LanguagePie.svelte"
-  import MostStarredRepo      from "$lib/features/repos/MostStarredRepo.svelte"
-  import DashboardSkeleton    from "$lib/features/skeleton/DashboardSkeleton.svelte"
-  import ThemeCustomizer      from "$lib/components/ThemeCustomizer.svelte"
-  import WallpaperExporter    from "$lib/features/exporter/WallpaperExporter.svelte"
-  import { Download }         from "lucide-svelte"
+	import { page } from "$app/stores"
+	import { goto } from "$app/navigation"
+	import { useSearch } from "$lib/features/search/useSearch.svelte"
+	import SearchBar from "$lib/features/search/SearchBar.svelte"
+	import EmptyState from "$lib/features/search/EmptyState.svelte"
+	import DashboardWidget from "$lib/widgets/dashboard/DashboardWidget.svelte"
+	import DashboardSkeleton from "$lib/shared/ui/skeleton/DashboardSkeleton.svelte"
+	import ThemeCustomizer from "$lib/features/theme/ThemeCustomizer.svelte"
+	import WallpaperExporter from "$lib/features/exporter/WallpaperExporter.svelte"
 
-  const search = useSearch()
-  let showExporter = $state(false)
+	const search = useSearch()
+	let showExporter = $state(false)
+	let urlUsername = $derived($page.url.searchParams.get("username"))
 
-  let urlUsername = $derived($page.url.searchParams.get('username'));
+	$effect(() => {
+		const shouldTriggerSearch =
+			urlUsername && urlUsername !== search.currentUsername && !search.loading
+		if (shouldTriggerSearch) {
+			search.onSearch(urlUsername)
+		}
+	})
 
-  $effect(() => {
-    if (urlUsername && urlUsername !== search.currentUsername && !search.loading) {
-      search.onSearch(urlUsername);
-    }
-  });
-
-  function handleSearchSubmit(username: string) {
-    goto(`/?username=${encodeURIComponent(username)}`, { keepFocus: true, noScroll: true });
-    search.onSearch(username);
-  }
+	function handleSearchSubmit(username: string) {
+		const searchParams = new URLSearchParams()
+		searchParams.set("username", username)
+		goto(`/?${searchParams.toString()}`, { keepFocus: true, noScroll: true })
+		search.onSearch(username)
+	}
 </script>
 
 <svelte:head>
-  {#if urlUsername}
-    <title>{urlUsername}'s GitHub Stats | GitPeek</title>
-    <meta property="og:title" content="{urlUsername}'s GitHub Stats | GitPeek" />
-    <meta property="og:description" content="Peek at {urlUsername}'s GitHub profile stats, languages, and top repositories." />
-    <!-- Cache bust version added here (&v=1) -->
-    <meta property="og:image" content="{$page.url.origin}/og?username={urlUsername}&v=1" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="{urlUsername}'s GitHub Stats | GitPeek" />
-    <meta name="twitter:image" content="{$page.url.origin}/og?username={urlUsername}&v=1" />
-  {:else}
-    <title>GitPeek — Peek at any GitHub profile, beautifully</title>
-    <meta property="og:title" content="GitPeek — Peek at any GitHub profile, beautifully" />
-    <meta property="og:image" content="{$page.url.origin}/favicon.svg" />
-  {/if}
+	{#if urlUsername}
+		<title>{urlUsername}'s GitHub Stats | GitPeek</title>
+		<meta property="og:title" content="{urlUsername}'s GitHub Stats | GitPeek" />
+		<meta
+			property="og:description"
+			content="Peek at {urlUsername}'s GitHub profile stats, languages, and top repositories."
+		/>
+		<meta property="og:image" content="{$page.url.origin}/og?username={urlUsername}&v=1" />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content="{urlUsername}'s GitHub Stats | GitPeek" />
+		<meta name="twitter:image" content="{$page.url.origin}/og?username={urlUsername}&v=1" />
+	{:else}
+		<title>GitPeek — Peek at any GitHub profile, beautifully</title>
+		<meta property="og:title" content="GitPeek — Peek at any GitHub profile, beautifully" />
+		<meta property="og:image" content="{$page.url.origin}/favicon.svg" />
+	{/if}
 </svelte:head>
 
 <div class="aurora-bg" aria-hidden="true"></div>
 
-<!-- Theme picker -->
 <div class="fixed top-4 right-4 z-50">
-  <ThemeCustomizer />
+	<ThemeCustomizer />
 </div>
 
-<main class="
-  min-h-screen flex flex-col items-center
-  px-4 sm:px-6 py-10 sm:py-16 md:py-20
-  gap-8 sm:gap-10 md:gap-12
-  touch-pan-y w-full max-w-[100vw] overflow-x-hidden
-">
-  <header class="flex flex-col items-center gap-2 sm:gap-3 fade-in-up text-center px-2">
-    <span class="
-      text-[11px] sm:text-xs font-mono tracking-[0.2em]
-      sm:tracking-[0.25em] uppercase text-subtle"
-      aria-label="GitHub Stats"
-    >
-      github stats
-    </span>
-    <h1 class="text-4xl sm:text-5xl md:text-7xl tracking-tight leading-none font-serif">
-      <span class="gradient-text">GitPeek</span>
-    </h1>
-    <p class="text-xs sm:text-sm font-mono mt-1 tracking-wide text-subtle">
-      peek at any github profile — beautifully
-    </p>
-  </header>
+<main class="main-layout">
+	<header class="page-header">
+		<span class="eyebrow" aria-label="GitHub Stats"> github stats </span>
+		<h1 class="page-title">
+			<span class="gradient-text">GitPeek</span>
+		</h1>
+		<p class="tagline">peek at any github profile — beautifully</p>
+	</header>
 
-  <div class="fade-in-up w-full flex justify-center px-2" style="animation-delay:80ms">
-    <!-- 4. Pass our new handler to the search bar -->
-    <SearchBar onSearch={handleSearchSubmit} />
-  </div>
+	<div class="search-section">
+		<SearchBar onSearch={handleSearchSubmit} />
+	</div>
 
-  {#if search.loading}
-    <DashboardSkeleton />
-  {/if}
+	{#if search.loading}
+		<DashboardSkeleton />
+	{/if}
 
-  {#if search.stats}
-    <div class="dashboard-bar fade-in-up" style="animation-delay:60ms">
-      <button
-        onclick={() => showExporter = true}
-        class="flex items-center gap-2 px-3 py-2 rounded-xl glass font-mono text-xs tracking-wide uppercase transition-all duration-200 border"
-        style="color: var(--subtle); border-color: color-mix(in srgb, var(--highlight-med) 50%, transparent);"
-        aria-label="Export wallpaper"
-      >
-        <Download size={13} />
-        <span>Wallpaper</span>
-      </button>
-    </div>
+	{#if search.stats}
+		<DashboardWidget
+			stats={search.stats}
+			username={search.currentUsername}
+			onExport={() => (showExporter = true)}
+		/>
+	{/if}
 
-    <div class="dashboard">
-      <div class="col fade-in-up">
-        <ProfileCard stats={search.stats} login={search.currentUsername} />
-        <StatGrid stats={search.stats} />
-      </div>
-      <div class="col fade-in-up" style="animation-delay:80ms">
-        {#if search.stats.languages?.length}
-          <LanguagePie
-            languages={search.stats.languages}
-            avatarUrl={search.stats.avatarUrl}
-          />
-        {/if}
-        {#if search.stats.mostStarredRepo}
-          <MostStarredRepo repo={search.stats.mostStarredRepo} />
-        {/if}
-      </div>
-    </div>
-  {/if}
-
-  {#if search.noResults}
-    <EmptyState username={search.currentUsername} />
-  {/if}
+	{#if search.noResults}
+		<EmptyState username={search.currentUsername} />
+	{/if}
 </main>
 
 {#if showExporter && search.stats}
-  <WallpaperExporter
-    stats={search.stats}
-    login={search.currentUsername}
-    onClose={() => showExporter = false}
-  />
+	<WallpaperExporter
+		stats={search.stats}
+		login={search.currentUsername}
+		onClose={() => (showExporter = false)}
+	/>
 {/if}
 
 <style>
-  .dashboard-bar {
-    display: flex;
-    justify-content: flex-end;
-    width: 100%;
-    max-width: 1100px;
-    margin: 0 auto;
-  }
-  .dashboard {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 16px;
-    width: 100%;
-    max-width: 1100px;
-    margin: 0 auto;
-    touch-action: pan-y pinch-zoom;
-  }
-  @media (min-width: 860px) {
-    .dashboard { grid-template-columns: 1.05fr 1fr; align-items: start; }
-  }
-  .col { display: flex; flex-direction: column; gap: 14px; touch-action: pan-y; }
-  @media (max-width: 640px) {
-    .dashboard { gap: 12px; }
-    .col { gap: 12px; }
-  }
+	.main-layout {
+		display: flex;
+		min-height: 100vh;
+		width: 100%;
+		max-width: 100vw;
+		flex-direction: column;
+		align-items: center;
+		gap: 2rem;
+		overflow-x: hidden;
+		padding: 2.5rem 1rem;
+	}
+
+	@media (min-width: 640px) {
+		.main-layout {
+			padding: 4rem 1.5rem;
+			gap: 2.5rem;
+		}
+	}
+
+	@media (min-width: 768px) {
+		.main-layout {
+			padding: 5rem 1.5rem;
+			gap: 3rem;
+		}
+	}
+
+	.page-header {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0 0.5rem;
+		text-align: center;
+		animation: fade-in-up 0.5s ease-out;
+	}
+
+	.eyebrow {
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.2em;
+		color: var(--subtle);
+	}
+
+	.page-title {
+		font-family: var(--font-serif);
+		font-size: 2.5rem;
+		line-height: 1;
+		letter-spacing: -0.02em;
+	}
+
+	@media (min-width: 640px) {
+		.page-title {
+			font-size: 3rem;
+		}
+	}
+
+	@media (min-width: 768px) {
+		.page-title {
+			font-size: 4.5rem;
+		}
+	}
+
+	.tagline {
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		letter-spacing: 0.05em;
+		color: var(--subtle);
+		margin-top: 0.25rem;
+	}
+
+	.search-section {
+		display: flex;
+		width: 100%;
+		justify-content: center;
+		padding: 0 0.5rem;
+		animation: fade-in-up 0.5s ease-out 80ms backwards;
+	}
 </style>

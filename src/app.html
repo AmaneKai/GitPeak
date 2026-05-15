@@ -3,7 +3,10 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-		<meta name="description" content="Peek at any GitHub profile — explore stats, languages, repositories, and contribution history, beautifully." />
+		<meta
+			name="description"
+			content="Peek at any GitHub profile — explore stats, languages, repositories, and contribution history, beautifully."
+		/>
 
 		<!-- Preconnect for Google Fonts -->
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -14,7 +17,7 @@
 			href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap"
 			rel="stylesheet"
 			media="print"
-			onload="this.media='all'"
+			onload="this.media = 'all'"
 			crossorigin="anonymous"
 		/>
 		<noscript>
@@ -30,7 +33,7 @@
 			href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap"
 			rel="stylesheet"
 			media="print"
-			onload="this.media='all'"
+			onload="this.media = 'all'"
 			crossorigin="anonymous"
 		/>
 		<noscript>
@@ -45,15 +48,16 @@
 		<title>GitPeek — Peek at any GitHub profile, beautifully</title>
 		<script>
 			try {
-				var n = localStorage.getItem('gitpeek-theme');
-				if (n === 'custom') {
-					var raw = localStorage.getItem('gitpeek-theme-tokens');
+				var n = localStorage.getItem("gitpeek-theme")
+				if (n === "custom") {
+					var raw = localStorage.getItem("gitpeek-theme-tokens")
 					if (raw) {
-						var tok = JSON.parse(raw), r = document.documentElement;
-						for (var k in tok) r.style.setProperty('--' + k, tok[k]);
+						var tok = JSON.parse(raw),
+							r = document.documentElement
+						for (var k in tok) r.style.setProperty("--" + k, tok[k])
 					}
 				} else if (n) {
-					document.documentElement.setAttribute('data-theme', n);
+					document.documentElement.setAttribute("data-theme", n)
 				}
 			} catch (e) {}
 		</script>
