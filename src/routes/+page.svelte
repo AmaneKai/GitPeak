@@ -31,8 +31,8 @@
 
 <svelte:head>
 	{#if urlUsername}
-		<title>{urlUsername}'s GitHub Stats | GitPeek</title>
-		<meta property="og:title" content="{urlUsername}'s GitHub Stats | GitPeek" />
+		<title>{urlUsername}'s GitHub Stats | GitPeak</title>
+		<meta property="og:title" content="{urlUsername}'s GitHub Stats | GitPeak" />
 		<meta
 			property="og:description"
 			content="Peek at {urlUsername}'s GitHub profile stats, languages, and top repositories."
@@ -41,11 +41,11 @@
 		<meta property="og:image:width" content="1200" />
 		<meta property="og:image:height" content="630" />
 		<meta name="twitter:card" content="summary_large_image" />
-		<meta name="twitter:title" content="{urlUsername}'s GitHub Stats | GitPeek" />
+		<meta name="twitter:title" content="{urlUsername}'s GitHub Stats | GitPeak" />
 		<meta name="twitter:image" content="{$page.url.origin}/og?username={urlUsername}&v=1" />
 	{:else}
-		<title>GitPeek — Peek at any GitHub profile, beautifully</title>
-		<meta property="og:title" content="GitPeek — Peek at any GitHub profile, beautifully" />
+		<title>GitPeak — Peek at any GitHub profile, beautifully</title>
+		<meta property="og:title" content="GitPeak — Peek at any GitHub profile, beautifully" />
 		<meta property="og:image" content="{$page.url.origin}/favicon.svg" />
 	{/if}
 </svelte:head>
@@ -60,9 +60,9 @@
 	<header class="page-header">
 		<span class="eyebrow" aria-label="GitHub Stats"> github stats </span>
 		<h1 class="page-title">
-			<span class="gradient-text">GitPeek</span>
+			<span class="gradient-text">GitPeak</span>
 		</h1>
-		<p class="tagline">peek at any github profile — beautifully</p>
+		<p class="tagline">peek at any github profile beautifully</p>
 	</header>
 
 	<div class="search-section">

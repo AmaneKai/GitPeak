@@ -122,7 +122,7 @@
 				<div style="flex:1"></div>
 
 				<div class="branding">
-					<span class="brand-name">GitPeek</span>
+					<span class="brand-name">GitPeak</span>
 					<span class="brand-url">github.com/{login}</span>
 				</div>
 			</aside>
@@ -150,7 +150,7 @@
 	{:else}
 		<div class="pt-layout">
 			<div class="pt-logo">
-				<span class="brand-name">GitPeek</span>
+				<span class="brand-name">GitPeak</span>
 			</div>
 
 			<div class="pt-profile-card">

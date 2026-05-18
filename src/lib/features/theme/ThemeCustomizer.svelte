@@ -61,7 +61,7 @@
 
 	function exportCSS() {
 		const lines = [
-			"/* GitPeek Custom Theme */",
+			"/* GitPeak Custom Theme */",
 			"/* Import this file in the theme customizer */",
 			"",
 			":root {",
@@ -72,7 +72,7 @@
 		const url = URL.createObjectURL(blob)
 		const a = document.createElement("a")
 		a.href = url
-		a.download = "gitpeek-theme.css"
+		a.download = "gitpeak-theme.css"
 		a.click()
 		URL.revokeObjectURL(url)
 	}

@@ -157,8 +157,8 @@ export const PRESET_THEMES: Record<string, ThemeTokens> = {
 	},
 }
 
-const STORAGE_KEY = "gitpeek-theme"
-const CUSTOM_TOKENS_KEY = "gitpeek-theme-tokens"
+const STORAGE_KEY = "gitpeak-theme"
+const CUSTOM_TOKENS_KEY = "gitpeak-theme-tokens"
 
 function isBrowser() {
 	return typeof window !== "undefined"

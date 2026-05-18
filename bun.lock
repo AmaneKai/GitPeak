@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "gitpeek",
+      "name": "gitpeak",
       "dependencies": {
         "@resvg/resvg-js": "^2.6.2",
         "chart.js": "^4.5.1",

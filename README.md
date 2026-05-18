@@ -1,9 +1,9 @@
-# GitPeek
+# GitPeak
 
 A web application for viewing public GitHub profile statistics. Enter any GitHub username and get
 an instant overview of their activity, languages, repositories, and contribution history.
 
-Live at [gitpk.vercel.app](https://gitpk.vercel.app)
+Live at [gitpeak.vercel.app](https://gitpeak.vercel.app)
 
 ---
 
@@ -20,7 +20,7 @@ Live at [gitpk.vercel.app](https://gitpk.vercel.app)
 
 ## Add to your GitHub README
 
-You can embed your GitPeek dashboard directly into your GitHub profile `README.md`! It generates
+You can embed your GitPeak dashboard directly into your GitHub profile `README.md`! It generates
 an animated, auto-updating SVG of your GitHub stats.
 
 Just copy and paste this code into your README, and replace `YOUR_USERNAME` with your actual
@@ -36,7 +36,7 @@ GitHub username:
 
 ### Themes
 
-GitPeek supports 8 built-in themes. To change the look of your README card, simply add
+GitPeak supports 8 built-in themes. To change the look of your README card, simply add
 `&theme=Theme+Name` to the end of the image URL.
 
 For example, to use the **Catppuccin Mocha** theme:

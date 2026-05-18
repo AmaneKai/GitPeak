@@ -102,7 +102,7 @@
 
 			const a = document.createElement("a")
 			a.href = dataUrl
-			a.download = `gitpeek-${login}-${selected.id}.png`
+			a.download = `gitpeak-${login}-${selected.id}.png`
 
 			a.click()
 
