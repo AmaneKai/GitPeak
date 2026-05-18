@@ -28,8 +28,8 @@ GitHub username:
 
 ```html
 <div align="center">
-	<a href="https://gitpk.vercel.app/?username=YOUR_USERNAME">
-		<img src="https://gitpk.vercel.app/api/readme?username=YOUR_USERNAME" alt="My GitHub Stats" />
+	<a href="https://gitpeak.vercel.app/?username=YOUR_USERNAME">
+		<img src="https://gitpeak.vercel.app/api/readme?username=YOUR_USERNAME" alt="My GitHub Stats" />
 	</a>
 </div>
 ```
@@ -42,7 +42,7 @@ GitPeak supports 8 built-in themes. To change the look of your README card, simp
 For example, to use the **Catppuccin Mocha** theme:
 
 ```html
-<img src="https://gitpk.vercel.app/api/readme?username=YOUR_USERNAME&theme=Catppuccin+Mocha" />
+<img src="https://gitpeak.vercel.app/api/readme?username=YOUR_USERNAME&theme=Catppuccin+Mocha" />
 ```
 
 **Available Themes:**
