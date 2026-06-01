@@ -151,37 +151,15 @@
             left: ${buttonOffset}px;
           `}
         >
-          {#if viewMode === 'languages' && hoveredIndex !== null}
-            {@const slice = pieManager.slices[hoveredIndex]}
-            <div class="fade-in flex flex-col items-center justify-center px-1 text-center">
-              <span class="font-mono text-[10px] font-bold" style="color: {slice.color}">
-                &larr; {slice.name} {slice.percentage}% &rarr;
-              </span>
-            </div>
-          {:else if viewMode === 'orbit' && hoveredIndex !== null}
-            {@const node = orbitNodes[hoveredIndex]}
-            <div class="fade-in flex flex-col items-center justify-center px-1 text-center">
-              <span
-                class="font-mono text-[9px] font-bold leading-tight"
-                style="color: {node.languageColor}"
-              >
-                {node.name}
-              </span>
-              <span class="text-subtle font-mono text-[8px] uppercase tracking-tighter">
-                {node.relativeTimeLabel}
-              </span>
-            </div>
-          {:else}
-            <Avatar.Root
-              class="absolute inset-0 h-full w-full transition-all
-                group-hover:brightness-110"
-            >
-              <Avatar.Image src={avatarUrl} alt="User avatar" />
-              <Avatar.Fallback class="bg-muted text-muted-foreground font-mono text-xs">
-                GP
-              </Avatar.Fallback>
-            </Avatar.Root>
-          {/if}
+          <Avatar.Root
+            class="absolute inset-0 h-full w-full transition-all
+              group-hover:brightness-110"
+          >
+            <Avatar.Image src={avatarUrl} alt="User avatar" />
+            <Avatar.Fallback class="bg-muted text-muted-foreground font-mono text-xs">
+              GP
+            </Avatar.Fallback>
+          </Avatar.Root>
         </button>
       </div>
 
