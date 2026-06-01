@@ -6,6 +6,7 @@
     getTokens,
     applyTokens,
     applyPreset as applyPresetTheme,
+    saveCustomTokens,
     getSavedPresetName,
     parseThemeFromCSS,
     type ThemeTokens,
@@ -22,7 +23,8 @@
 
   onMount(async () => {
     tokens = { ...getTokens() }
-    activePreset = getSavedPresetName() ?? 'Rosé Pine'
+    const saved = getSavedPresetName()
+    activePreset = saved || (localStorage.getItem('gitpeak-theme') === 'custom' ? null : 'Rosé Pine')
     await import('vanilla-colorful/hex-color-picker.js')
   })
 
@@ -30,6 +32,7 @@
     tokens = { ...tokens, [key]: value }
     activePreset = null
     applyTokens(tokens)
+    saveCustomTokens(tokens)
   }
 
   function applyPreset(name: string) {
@@ -57,6 +60,7 @@
       tokens = { ...PRESET_THEMES['Rosé Pine'], ...parsed } as ThemeTokens
       activePreset = null
       applyTokens(tokens)
+      saveCustomTokens(tokens)
     }
     reader.readAsText(file)
   }

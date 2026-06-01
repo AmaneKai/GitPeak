@@ -172,22 +172,50 @@ export function pickAccentColor(index: number): string {
   return ACCENT_COLORS[index % ACCENT_COLORS.length]
 }
 
+const STORAGE_KEY = 'gitpeak-theme'
+const CUSTOM_TOKENS_KEY = 'gitpeak-theme-tokens'
+
 export function initTheme(): void {
   if (typeof window === 'undefined')
     return
 
-  const savedTheme = localStorage.getItem('gitpeak-theme')
-  if (savedTheme) 
+  const savedTheme = localStorage.getItem(STORAGE_KEY)
+  if (!savedTheme) return
+
+  if (savedTheme === 'custom') {
+    const raw = localStorage.getItem(CUSTOM_TOKENS_KEY)
+    if (raw) {
+      try {
+        const tokens = JSON.parse(raw)
+        applyTokens(tokens)
+      } catch (e) {
+        console.error('Failed to parse saved theme tokens', e)
+      }
+    }
+  } else {
     document.documentElement.setAttribute('data-theme', savedTheme)
-  
+  }
 }
 
 export function setTheme(themeName: string): void {
   if (typeof window === 'undefined')
     return
 
-  localStorage.setItem('gitpeak-theme', themeName)
+  localStorage.setItem(STORAGE_KEY, themeName)
+  localStorage.removeItem(CUSTOM_TOKENS_KEY)
   document.documentElement.setAttribute('data-theme', themeName)
+  
+  // Clear any inline styles that might be overriding the data-theme
+  document.documentElement.removeAttribute('style')
+}
+
+export function saveCustomTokens(tokens: ThemeTokens): void {
+  if (typeof window === 'undefined')
+    return
+
+  localStorage.setItem(STORAGE_KEY, 'custom')
+  localStorage.setItem(CUSTOM_TOKENS_KEY, JSON.stringify(tokens))
+  document.documentElement.removeAttribute('data-theme')
 }
 
 export function getTokens(): ThemeTokens {
@@ -209,10 +237,12 @@ export function applyTokens(tokens: ThemeTokens): void {
 export function getSavedPresetName(): string | null {
   if (typeof window === 'undefined')
     return null
-  return localStorage.getItem('gitpeak-theme')
+  const name = localStorage.getItem(STORAGE_KEY)
+  return name === 'custom' ? null : name
 }
 
 export function applyPreset(themeName: string): void {
+  setTheme(themeName)
   const tokens = PRESET_THEMES[themeName]
   if (tokens) 
     applyTokens(tokens)
