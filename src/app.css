@@ -1,8 +1,5 @@
 @import "tailwindcss";
 
-@import url("https://fonts.googleapis.com/css2?family=jetbrains+mono:wght@300;400;500&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=instrument+serif:ital,wght@0,400;1,400&family=dm+mono:ital,wght@0,300;0,400;0,500;1,300&display=swap");
-
 @theme {
   --color-base: var(--base);
   --color-surface: var(--surface);

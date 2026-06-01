@@ -100,7 +100,7 @@
   {/if}
 
   {#if searchManager.noResults}
-    <EmptyState username={searchManager.currentUsername} />
+    <EmptyState username={searchManager.currentUsername} error={searchManager.error} />
   {/if}
 </main>
 
