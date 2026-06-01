@@ -1,0 +1,6228 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+src/
+  lib/
+    entities/
+      github/
+        api/
+          config.ts
+          github.ts
+        model/
+          github-stats.ts
+        ui/
+          LanguagePie.svelte
+          MostStarredRepo.svelte
+          ProfileCard.svelte
+          StatGrid.svelte
+          useLanguagePie.svelte.ts
+          useStatGrid.svelte.ts
+    features/
+      exporter/
+        DonutChart.svelte
+        WallpaperCanvas.svelte
+        WallpaperExporter.svelte
+      search/
+        EmptyState.svelte
+        SearchBar.svelte
+        useSearch.svelte.ts
+      theme/
+        ThemeCustomizer.svelte
+    shared/
+      api/
+        client.ts
+        result.ts
+      ui/
+        avatar/
+          avatar-badge.svelte
+          avatar-fallback.svelte
+          avatar-group-count.svelte
+          avatar-group.svelte
+          avatar-image.svelte
+          avatar.svelte
+          index.ts
+        badge/
+          badge-variants.ts
+          badge.svelte
+          index.ts
+        button/
+          button-variants.ts
+          button.svelte
+          index.ts
+        card/
+          card-action.svelte
+          card-content.svelte
+          card-description.svelte
+          card-footer.svelte
+          card-header.svelte
+          card-title.svelte
+          card.svelte
+          index.ts
+        input/
+          index.ts
+          input.svelte
+        separator/
+          index.ts
+          separator.svelte
+        skeleton/
+          DashboardSkeleton.svelte
+        sonner/
+          index.ts
+          sonner.svelte
+      utils/
+        format.ts
+        icons.ts
+        theme.ts
+        tilt.ts
+        ui.ts
+    widgets/
+      dashboard/
+        DashboardWidget.svelte
+  routes/
+    api/
+      readme/
+        +server.ts
+    og/
+      +server.ts
+    +layout.svelte
+    +page.svelte
+  app.css
+  app.d.ts
+  app.html
+static/
+  favicon.ico
+  favicon.svg
+  googlea093edd0a51afb26.html
+  robots.txt
+.env.example
+.gitignore
+.npmrc
+.prettierrc
+components.json
+eslint.config.mjs
+package.json
+README.md
+svelte.config.js
+tailwind.config.ts
+tsconfig.json
+vercel.json
+vite.config.ts
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="src/lib/entities/github/api/config.ts">
+import { dev } from "$app/environment"
+
+const GITHUB_API_URL = "https://ghfetch.carlosranara.workers.dev/v1/stats"
+const DEFAULT_TIMEOUT_MS = 10_000
+const MAX_TIMEOUT_MS = 30_000
+const USERNAME_PATTERN = /^[a-zA-Z0-9-]{1,39}$/
+
+function getEnv(): Record<string, string | undefined> {
+	return typeof import.meta !== "undefined" ? (import.meta.env as any) : {}
+}
+
+function resolveApiUrl(): string {
+	const env = getEnv()
+	const url = env.VITE_API_URL ?? (dev ? env.PUBLIC_API_URL : undefined)
+
+	return typeof url === "string" && url.length > 0 ? url : GITHUB_API_URL
+}
+
+function resolveTimeout(): number {
+	const env = getEnv()
+	const raw = env.VITE_API_TIMEOUT
+	const parsed = typeof raw === "string" ? parseInt(raw, 10) : NaN
+
+	return Number.isFinite(parsed) && parsed > 0
+		? Math.min(parsed, MAX_TIMEOUT_MS)
+		: DEFAULT_TIMEOUT_MS
+}
+
+export const githubConfig = {
+	apiUrl: resolveApiUrl(),
+	timeout: resolveTimeout(),
+	usernamePattern: USERNAME_PATTERN,
+}
+
+export function isValidUsername(username: unknown): username is string {
+	return (
+		typeof username === "string" &&
+		username.length > 0 &&
+		username.length <= 39 &&
+		USERNAME_PATTERN.test(username)
+	)
+}
+</file>
+
+<file path="src/lib/entities/github/api/github.ts">
+import { err, type Result } from "../../../shared/api/result"
+import { fetchWithTimeout, handleNetworkError, parseResponse } from "../../../shared/api/client"
+import { githubConfig, isValidUsername } from "./config"
+import { GithubStatsSchema, type GithubStats } from "../model/github-stats"
+
+const NOT_FOUND = 404
+const RATE_LIMITED = 429
+const BAD_GATEWAY = 502
+const SERVICE_UNAVAILABLE = 503
+const INTERNAL_SERVER_ERROR = 500
+
+function getErrorMessage(status: number): string {
+	const messages: Record<number, string> = {
+		[NOT_FOUND]: "GitHub user not found",
+		[RATE_LIMITED]: "Rate limited — try again in a moment",
+		[BAD_GATEWAY]: "Service is unavailable, try again shortly",
+		[SERVICE_UNAVAILABLE]: "Service is unavailable, try again shortly",
+	}
+
+	if (status >= INTERNAL_SERVER_ERROR) {
+		return "Something went wrong on our end, try again shortly"
+	}
+
+	return messages[status] ?? "Unexpected error, please try again"
+}
+
+export async function fetchGithubStats(username: string): Promise<Result<GithubStats>> {
+	if (!isValidUsername(username)) {
+		return err("Username must be 1–39 alphanumeric characters or hyphens")
+	}
+
+	const url = `${githubConfig.apiUrl}?username=${encodeURIComponent(
+		username.trim().toLowerCase(),
+	)}&_t=${Date.now()}`
+
+	try {
+		const response = await fetchWithTimeout(url, {
+			timeout: githubConfig.timeout,
+			cache: "no-store",
+		})
+
+		if (!response.ok) {
+			return err(getErrorMessage(response.status))
+		}
+
+		const result = await response.json()
+		if (!result.ok) {
+			return err("Could not load this profile — try again")
+		}
+
+		const validation = GithubStatsSchema.safeParse(result.data)
+		if (!validation.success) {
+			return err("Response validation failed")
+		}
+
+		return { ok: true, data: validation.data }
+	} catch (error) {
+		return err(handleNetworkError(error))
+	}
+}
+</file>
+
+<file path="src/lib/entities/github/ui/MostStarredRepo.svelte">
+<script lang="ts">
+	import type { MostStarredRepo } from "$lib/entities/github/model/github-stats"
+	import { formatNumber } from "$lib/shared/utils/format"
+	import { Star, ArrowUpRight } from "lucide-svelte"
+	import { Badge } from "$lib/shared/ui/badge"
+	import { Button } from "$lib/shared/ui/button"
+	import { Card, CardContent } from "$lib/shared/ui/card"
+  import { cn } from "$lib/shared/utils/ui"
+
+	let { repo }: { repo: MostStarredRepo } = $props()
+</script>
+
+{#if repo}
+	<Card
+		class={cn(
+      "glass overflow-hidden rounded-2xl transition-[border-color,box-shadow,transform]",
+      "duration-180 ease-out hover:-translate-y-px"
+    )}
+	>
+		<a href={repo.url} target="_blank" rel="noopener noreferrer" class="block no-underline">
+			<CardContent class="p-5">
+				<div class="flex items-start justify-between gap-4">
+					<div class="flex min-w-0 flex-1 flex-col gap-2">
+						<span
+							class="font-mono text-[9px] tracking-[0.2em] uppercase"
+							style="color: var(--muted)"
+						>
+							★ most starred repo
+						</span>
+						<span
+							class="truncate font-serif text-lg leading-tight font-semibold"
+							style="color: var(--text)"
+						>
+							{repo.name}
+						</span>
+						<div class="mt-1 flex items-center gap-2">
+							<Badge
+								variant="outline"
+								class="flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-mono"
+								style="background:color-mix(in srgb, var(--gold) 10%, transparent);
+                       border-color:color-mix(in srgb, var(--gold) 20%, transparent);
+                       color:var(--gold);"
+							>
+								<Star size={12} style="fill:var(--gold)" />
+								{formatNumber(repo.stars)}
+							</Badge>
+							<span class="font-mono text-[10px]" style="color:var(--muted)">stars</span>
+						</div>
+					</div>
+
+					<Button
+						variant="ghost"
+						size="icon"
+						class="mt-1 h-8 w-8 shrink-0 rounded-xl"
+						style="background:color-mix(in srgb, var(--highlight-med) 60%, transparent); 
+            color:var(--muted);"
+					>
+						<ArrowUpRight size={15} />
+					</Button>
+				</div>
+			</CardContent>
+		</a>
+	</Card>
+{/if}
+</file>
+
+<file path="src/lib/entities/github/ui/ProfileCard.svelte">
+<script lang="ts">
+	import type { GithubStats } from "$lib/entities/github/model/github-stats"
+	import { accountAge, formatNumber } from "$lib/shared/utils/format"
+	import { ExternalLink, Calendar, Users } from "lucide-svelte"
+	import { Card, CardContent } from "$lib/shared/ui/card"
+	import { Badge } from "$lib/shared/ui/badge"
+	import { Separator } from "$lib/shared/ui/separator"
+	import { cn } from "$lib/shared/utils/ui"
+
+	let { stats, login }: { stats: GithubStats; login: string } = $props()
+	let displayName = $derived(stats.displayName || login)
+</script>
+
+<Card class={cn("glass relative overflow-hidden rounded-2xl")}>
+	<div
+		aria-hidden="true"
+		class="pointer-events-none absolute -top-12 -left-12 h-44 w-44 rounded-full blur-[36px]"
+		style="background:radial-gradient(circle, color-mix(in srgb, var(--iris) 14%, 
+    transparent) 0%, transparent 70%)"
+	></div>
+	<div
+		aria-hidden="true"
+		class="pointer-events-none absolute -top-8 -right-8 h-28 w-28 rounded-full blur-[28px]"
+		style="background:radial-gradient(circle, color-mix(in srgb, 
+    var(--foam) 10%, transparent) 0%, transparent 70%)"
+	></div>
+
+	<CardContent class={cn("relative flex items-start gap-3 p-4 sm:gap-5 sm:p-6")}>
+		<div
+			class="h-16 w-16 shrink-0 overflow-hidden rounded-2xl sm:h-20 sm:w-20"
+			style="border:1px solid color-mix(in srgb, var(--iris) 28%, transparent);
+             box-shadow:0 8px 24px -6px rgba(0,0,0,0.5), 
+             0 0 0 4px color-mix(in srgb, var(--iris) 5%, transparent);"
+		>
+			<img
+				src={stats.avatarUrl}
+				crossorigin="anonymous"
+				alt="{displayName}'s GitHub avatar"
+				width="80"
+				height="80"
+				class="h-full w-full object-cover"
+				loading="eager"
+				decoding="async"
+			/>
+		</div>
+
+		<div class="flex min-w-0 flex-1 flex-col gap-1.5">
+			<div class="flex flex-wrap items-start justify-between gap-2">
+				<h2
+					class="truncate font-serif text-lg leading-tight font-semibold sm:text-2xl"
+					style="color: var(--text)"
+				>
+					{displayName}
+				</h2>
+				<Badge
+					variant="outline"
+					class="flex shrink-0 items-center gap-1 px-2 py-1 font-mono text-[10px]"
+					style="background:color-mix(in srgb, var(--foam) 8%, transparent);
+                 border-color:color-mix(in srgb, var(--foam) 18%, transparent);
+                 color:var(--foam);"
+				>
+					<Calendar size={9} />
+					{accountAge(stats.accountCreatedAt)}
+				</Badge>
+			</div>
+
+			{#if stats.bio}
+				<p class="line-clamp-2 text-xs leading-relaxed sm:text-sm" style="color: var(--subtle)">
+					{stats.bio}
+				</p>
+			{/if}
+
+			<Separator
+				class="my-1"
+				style="background: color-mix(in srgb, var(--highlight-med) 30%, transparent)"
+			/>
+
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<a
+					href="https://github.com/{login}"
+					target="_blank"
+					rel="noopener noreferrer"
+					aria-label="View {displayName} on GitHub"
+					class="flex items-center gap-1 font-mono text-xs transition-colors duration-150"
+					style="color: var(--subtle)"
+				>
+					<span class="h-1.5 w-1.5 rounded-full" style="background:var(--foam)" aria-hidden="true"
+					></span>
+					github.com/{login}
+					<ExternalLink size={9} aria-hidden="true" />
+				</a>
+
+				<div class="flex items-center gap-3 font-mono text-[10px]" style="color: var(--subtle)">
+					<span class="flex items-center gap-1">
+						<Users size={9} aria-hidden="true" />
+						<span class="font-medium" style="color: var(--text)"
+							>{formatNumber(stats.followers)}</span
+						>
+						followers
+					</span>
+					<span>
+						<span class="font-medium" style="color: var(--text)"
+							>{formatNumber(stats.following)}</span
+						>
+						following
+					</span>
+				</div>
+			</div>
+		</div>
+	</CardContent>
+</Card>
+</file>
+
+<file path="src/lib/entities/github/ui/StatGrid.svelte">
+<script lang="ts">
+	import type { GithubStats } from "$lib/entities/github/model/github-stats"
+	import { formatNumber } from "$lib/shared/utils/format"
+	import { tiltStyle, shineStyle } from "$lib/shared/utils/tilt"
+	import { useStatGrid, heroItems, detailItems } from "./useStatGrid.svelte"
+	import * as Card from "$lib/shared/ui/card"
+  import { cn } from "$lib/shared/utils/ui"
+
+	let { stats }: { stats: GithubStats } = $props()
+	const grid = useStatGrid()
+
+	let isTouch = $state(false)
+	$effect(() => {
+		if (typeof window !== "undefined") {
+			isTouch = window.matchMedia("(pointer: coarse)").matches
+		}
+	})
+</script>
+
+<div class="flex flex-col gap-3">
+	<div class="grid grid-cols-2 gap-3">
+		{#each heroItems(stats) as item, i}
+			{@const Icon = item.icon as any}
+			{@const t = grid.tilts[i]}
+			{@const accent = `var(--${item.accentVar})`}
+			<Card.Root
+				role="presentation"
+				class={cn(
+        "tilt-card glass relative cursor-default overflow-hidden",
+        "rounded-2xl border-0 bg-transparent shadow-none select-none")}
+				style="{tiltStyle(t)}; animation-delay: {i * 50}ms"
+				onmousemove={!isTouch ? (e: any) => grid.onMove(e, i) : undefined}
+				onmouseleave={!isTouch ? (e: any) => grid.onLeave(e, i) : undefined}
+			>
+				<div
+					class="tilt-shine"
+					style="background:radial-gradient(ellipse at 100% 0%, 
+            color-mix(in srgb, {accent} 9%, transparent) 0%, transparent 60%);"
+				></div>
+				{#if !isTouch}
+					<div class="tilt-shine" style={shineStyle(t)}></div>
+				{/if}
+
+				<Card.Content
+					class="relative z-10 flex flex-col gap-3 p-[14px_16px] sm:gap-4 sm:p-[18px_20px]"
+				>
+					<div class="flex items-center justify-between">
+						<span
+							class="font-mono text-[9px] tracking-widest uppercase sm:text-[10px]"
+							style="color: var(--subtle)"
+						>
+							{item.label}
+						</span>
+						<span
+							class="flex h-6 w-6 items-center justify-center rounded-lg sm:h-7 sm:w-7"
+							style="background:color-mix(in srgb, {accent} 10%, transparent); color:{accent};"
+						>
+							<Icon size={12} />
+						</span>
+					</div>
+
+					<span
+						class="font-serif leading-none font-bold tracking-tight"
+						style="font-size: clamp(1.8rem, 5vw, 2.6rem); color: var(--text);"
+					>
+						{formatNumber(item.value)}
+					</span>
+
+					<div
+						class="h-0.5 rounded-full transition-all duration-200"
+						style="
+            width:48px;
+            transform:scaleX({t.active ? 1 : 0.58});
+            transform-origin:left center;
+            background:{accent};
+            opacity:{t.active ? 0.8 : 0.5};
+            box-shadow:{t.active ? `0 0 8px ${accent}` : 'none'};
+          "
+					></div>
+				</Card.Content>
+			</Card.Root>
+		{/each}
+	</div>
+
+	<div class="grid grid-cols-3 gap-2 sm:gap-2.5">
+		{#each detailItems(stats) as item, i}
+			{@const Icon = item.icon as any}
+			{@const idx = i + 2}
+			{@const t = grid.tilts[idx]}
+			{@const accent = `var(--${item.accentVar})`}
+			<Card.Root
+				role="presentation"
+				class="tilt-card glass relative cursor-default 
+        overflow-hidden rounded-[14px] border-0 bg-transparent shadow-none select-none"
+				style="{tiltStyle(t)}; animation-delay: {idx * 50}ms"
+				onmousemove={!isTouch ? (e: any) => grid.onMove(e, idx) : undefined}
+				onmouseleave={!isTouch ? (e: any) => grid.onLeave(e, idx) : undefined}
+			>
+				<div
+					class="tilt-shine"
+					style="background:radial-gradient(ellipse at 100% 0%,
+          color-mix(in srgb, {accent} 7%, transparent) 0%, transparent 60%);"
+				></div>
+				{#if !isTouch}
+					<div class="tilt-shine" style={shineStyle(t)}></div>
+				{/if}
+
+				<Card.Content
+					class="relative z-10 flex flex-col gap-1.5 p-[10px_12px] sm:gap-2 sm:p-[12px_14px]"
+				>
+					<div class="flex items-center justify-between gap-1">
+						<span
+							class="truncate font-mono text-[8px] tracking-widest uppercase sm:text-[9px]"
+							style="color: var(--subtle)"
+						>
+							{item.label}
+						</span>
+						<span
+							class="flex h-4 w-4 shrink-0 items-center justify-center rounded-md sm:h-5 sm:w-5"
+							style="background:color-mix(in srgb, {accent} 9%, transparent); color:{accent};"
+						>
+							<Icon size={9} />
+						</span>
+					</div>
+
+					<span
+						class="font-serif leading-none font-bold tracking-tight"
+						style="font-size: clamp(1.1rem, 4vw, 1.6rem); color: var(--text);"
+					>
+						{formatNumber(item.value)}
+					</span>
+
+					<div
+						class="h-px rounded-full"
+						style="
+            width:36px;
+            transform:scaleX({t.active ? 1 : 0.55});
+            transform-origin:left center;
+            background:{accent};
+            opacity:{t.active ? 0.7 : 0.4};
+            transition:width 0.2s ease, opacity 0.2s ease;
+          "
+					></div>
+				</Card.Content>
+			</Card.Root>
+		{/each}
+	</div>
+</div>
+</file>
+
+<file path="src/lib/entities/github/ui/useLanguagePie.svelte.ts">
+import type { GitHubLanguage } from "$lib/entities/github/model/github-stats"
+import { pickAccentColor } from "$lib/shared/utils/theme"
+
+export type Slice = GitHubLanguage & {
+	color: string
+	startDeg: number
+	endDeg: number
+	midDeg: number
+}
+
+const GAP_DEG = 1.8
+const PUSH = 7
+
+export function getDims(isMobile: boolean) {
+	const SIZE = isMobile ? 160 : 200
+	const R_OUTER = isMobile ? 75 : 90
+	const R_INNER = isMobile ? 48 : 57
+	return { SIZE, CX: SIZE / 2, CY: SIZE / 2, R_OUTER, R_INNER }
+}
+
+function polarToXY(cx: number, cy: number, r: number, deg: number) {
+	const rad = (deg * Math.PI) / 180
+	return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) }
+}
+
+export function arcPath(
+	cx: number,
+	cy: number,
+	ro: number,
+	ri: number,
+	s: number,
+	e: number,
+	ox = 0,
+	oy = 0,
+): string {
+	const la = e - s > 180 ? 1 : 0
+	const o1 = polarToXY(cx, cy, ro, s),
+		o2 = polarToXY(cx, cy, ro, e)
+	const i1 = polarToXY(cx, cy, ri, e),
+		i2 = polarToXY(cx, cy, ri, s)
+	return [
+		`M ${o1.x + ox} ${o1.y + oy}`,
+		`A ${ro} ${ro} 0 ${la} 1 ${o2.x + ox} ${o2.y + oy}`,
+		`L ${i1.x + ox} ${i1.y + oy}`,
+		`A ${ri} ${ri} 0 ${la} 0 ${i2.x + ox} ${i2.y + oy}`,
+		"Z",
+	].join(" ")
+}
+
+export function segOffset(slice: Slice): { x: number; y: number } {
+	const rad = (slice.midDeg * Math.PI) / 180
+	return { x: Math.cos(rad) * PUSH, y: Math.sin(rad) * PUSH }
+}
+
+export function buildSlices(langs: GitHubLanguage[]): Slice[] {
+	if (!langs?.length) return []
+	let cursor = -90
+	return langs.map((l, i) => {
+		const span = (l.percentage / 100) * 360
+		const startDeg = cursor + GAP_DEG / 2
+		const endDeg = cursor + span - GAP_DEG / 2
+		const midDeg = cursor + span / 2
+		cursor += span
+		return { ...l, color: pickAccentColor(i), startDeg, endDeg, midDeg }
+	})
+}
+
+export function useLanguagePie(getLanguages: () => GitHubLanguage[]) {
+	const isMobile = typeof window !== "undefined" && window.innerWidth < 640
+	const dims = getDims(isMobile)
+
+	let hovered = $state<number | null>(null)
+	let sweepDeg = $state(-90)
+	const slices = $derived(buildSlices(getLanguages()))
+
+	$effect(() => {
+		const DURATION = 1200
+		const start = performance.now()
+		let raf: number
+
+		function tick(now: number) {
+			const t = Math.min((now - start) / DURATION, 1)
+			const eased = 1 - Math.pow(1 - t, 3)
+			sweepDeg = -90 + eased * 360
+			if (t < 1) raf = requestAnimationFrame(tick)
+		}
+
+		raf = requestAnimationFrame(tick)
+		return () => cancelAnimationFrame(raf)
+	})
+
+	const animatedSlices = $derived(
+		slices
+			.filter((s) => sweepDeg > s.startDeg)
+			.map((s) => ({ ...s, endDeg: Math.min(s.endDeg, sweepDeg) })),
+	)
+
+	return {
+		dims,
+		get hovered() {
+			return hovered
+		},
+		get slices() {
+			return slices
+		},
+		get animatedSlices() {
+			return animatedSlices
+		},
+		onEnter(i: number) {
+			hovered = i
+		},
+		onLeave() {
+			hovered = null
+		},
+	}
+}
+</file>
+
+<file path="src/lib/entities/github/ui/useStatGrid.svelte.ts">
+import type { GithubStats } from "$lib/entities/github/model/github-stats"
+import { neutralTilt, applyTilt, type TiltState } from "$lib/shared/utils/tilt"
+import {
+	GitFork,
+	Star,
+	Users,
+	GitCommit,
+	GitPullRequest,
+	CircleDot,
+	BookOpen,
+	Activity,
+} from "lucide-svelte"
+
+export type StatItem = {
+	label: string
+	value: number
+	icon: unknown
+	accentVar: string
+}
+
+export function heroItems(s: GithubStats): StatItem[] {
+	return [
+		{ label: "Contributions", value: s.totalContributions, icon: Activity, accentVar: "foam" },
+		{ label: "Commits", value: s.totalCommits, icon: GitCommit, accentVar: "iris" },
+	]
+}
+
+export function detailItems(s: GithubStats): StatItem[] {
+	return [
+		{ label: "Stars", value: s.totalStars, icon: Star, accentVar: "gold" },
+		{ label: "Repos", value: s.totalRepos, icon: BookOpen, accentVar: "iris" },
+		{ label: "Followers", value: s.followers, icon: Users, accentVar: "rose" },
+		{ label: "PRs", value: s.totalPrs, icon: GitPullRequest, accentVar: "love" },
+		{ label: "Issues", value: s.totalIssues, icon: CircleDot, accentVar: "gold" },
+	]
+}
+
+const CARD_COUNT = 8
+
+export function useStatGrid() {
+	let tilts = $state<TiltState[]>(Array.from({ length: CARD_COUNT }, neutralTilt))
+
+	return {
+		get tilts() {
+			return tilts
+		},
+		onMove(e: MouseEvent, i: number) {
+			tilts[i] = applyTilt(e, e.currentTarget as HTMLElement)
+		},
+		onLeave(_e: MouseEvent, i: number) {
+			tilts[i] = neutralTilt()
+		},
+	}
+}
+</file>
+
+<file path="src/lib/shared/api/client.ts">
+import { err, ok, type Result } from "./result"
+
+export async function fetchWithTimeout(
+	url: string,
+	options: RequestInit & { timeout?: number } = {},
+): Promise<Response> {
+	const { timeout = 10000, ...fetchOptions } = options
+
+	const controller = new AbortController()
+	const id = setTimeout(() => controller.abort(), timeout)
+
+	try {
+		const response = await fetch(url, {
+			...fetchOptions,
+			signal: controller.signal,
+		})
+		return response
+	} finally {
+		clearTimeout(id)
+	}
+}
+
+export function handleNetworkError(error: unknown): string {
+	if (error instanceof Error) {
+		if (error.name === "AbortError") {
+			return "Request timed out"
+		}
+		return error.message
+	}
+	return "Network error — check your connection"
+}
+
+export async function parseResponse<T>(
+	response: Response,
+	schema?: { safeParse: (data: unknown) => { success: boolean; data?: T; error?: any } },
+): Promise<Result<T>> {
+	if (!response.ok) {
+		return err(`HTTP Error ${response.status}: ${response.statusText}`)
+	}
+
+	try {
+		const data = await response.json()
+		if (schema) {
+			const result = schema.safeParse(data)
+			if (!result.success) {
+				return err("Response validation failed")
+			}
+			return ok(result.data as T)
+		}
+		return ok(data as T)
+	} catch {
+		return err("Failed to parse JSON response")
+	}
+}
+</file>
+
+<file path="src/lib/shared/api/result.ts">
+export type Ok<T> = { ok: true; data: T }
+export type Err = { ok: false; error: string }
+export type Result<T> = Ok<T> | Err
+
+export const ok = <T>(data: T): Ok<T> => ({ ok: true, data })
+export const err = (error: string): Err => ({ ok: false, error })
+</file>
+
+<file path="src/lib/shared/ui/avatar/avatar-badge.svelte">
+<script lang="ts">
+	import type { HTMLAttributes } from "svelte/elements"
+	import { cn, type WithElementRef } from "$lib/shared/utils/ui"
+
+	let {
+		ref = $bindable(null),
+		class: className,
+		children,
+		...restProps
+	}: WithElementRef<HTMLAttributes<HTMLSpanElement>> = $props()
+</script>
+
+<span
+	bind:this={ref}
+	data-slot="avatar-badge"
+	class={cn(
+		"bg-primary text-primary-foreground ring-background absolute right-0 bottom-0 z-10 inline-flex items-center justify-center rounded-full bg-blend-color ring-2 select-none",
+		"group-data-[size=sm]/avatar:size-2 group-data-[size=sm]/avatar:[&>svg]:hidden",
+		"group-data-[size=default]/avatar:size-2.5 group-data-[size=default]/avatar:[&>svg]:size-2",
+		"group-data-[size=lg]/avatar:size-3 group-data-[size=lg]/avatar:[&>svg]:size-2",
+		className,
+	)}
+	{...restProps}
+>
+	{@render children?.()}
+</span>
+</file>
+
+<file path="src/lib/shared/ui/avatar/avatar-fallback.svelte">
+<script lang="ts">
+	import { Avatar as AvatarPrimitive } from "bits-ui"
+	import { cn } from "$lib/shared/utils/ui"
+
+	let {
+		ref = $bindable(null),
+		class: className,
+		...restProps
+	}: AvatarPrimitive.FallbackProps = $props()
+</script>
+
+<AvatarPrimitive.Fallback
+	bind:ref
+	data-slot="avatar-fallback"
+	class={cn(
+		"bg-muted text-muted-foreground flex size-full items-center justify-center rounded-full text-sm group-data-[size=sm]/avatar:text-xs",
+		className,
+	)}
+	{...restProps}
+/>
+</file>
+
+<file path="src/lib/shared/ui/avatar/avatar-group-count.svelte">
+<script lang="ts">
+	import type { HTMLAttributes } from "svelte/elements"
+	import { cn, type WithElementRef } from "$lib/shared/utils/ui"
+
+	let {
+		ref = $bindable(null),
+		class: className,
+		children,
+		...restProps
+	}: WithElementRef<HTMLAttributes<HTMLDivElement>> = $props()
+</script>
+
+<div
+	bind:this={ref}
+	data-slot="avatar-group-count"
+	class={cn(
+		"bg-muted text-muted-foreground ring-background relative flex size-8 shrink-0 items-center justify-center rounded-full text-sm ring-2 group-has-data-[size=lg]/avatar-group:size-10 group-has-data-[size=sm]/avatar-group:size-6 [&>svg]:size-4 group-has-data-[size=lg]/avatar-group:[&>svg]:size-5 group-has-data-[size=sm]/avatar-group:[&>svg]:size-3",
+		className,
+	)}
+	{...restProps}
+>
+	{@render children?.()}
+</div>
+</file>
+
+<file path="src/lib/shared/ui/avatar/avatar-group.svelte">
+<script lang="ts">
+	import type { HTMLAttributes } from "svelte/elements"
+	import { cn, type WithElementRef } from "$lib/shared/utils/ui"
+
+	let {
+		ref = $bindable(null),
+		class: className,
+		children,
+		...restProps
+	}: WithElementRef<HTMLAttributes<HTMLDivElement>> = $props()
+</script>
+
+<div
+	bind:this={ref}
+	data-slot="avatar-group"
+	class={cn(
+		"cn-avatar-group *:data-[slot=avatar]:ring-background group/avatar-group flex -space-x-2 *:data-[slot=avatar]:ring-2",
+		className,
+	)}
+	{...restProps}
+>
+	{@render children?.()}
+</div>
+</file>
+
+<file path="src/lib/shared/ui/avatar/avatar-image.svelte">
+<script lang="ts">
+	import { Avatar as AvatarPrimitive } from "bits-ui"
+	import { cn } from "$lib/shared/utils/ui"
+
+	let {
+		ref = $bindable(null),
+		class: className,
+		...restProps
+	}: AvatarPrimitive.ImageProps = $props()
+</script>
+
+<AvatarPrimitive.Image
+	bind:ref
+	data-slot="avatar-image"
+	class={cn("aspect-square size-full rounded-full object-cover", className)}
+	{...restProps}
+/>
+</file>
+
+<file path="src/lib/shared/ui/avatar/avatar.svelte">
+<script lang="ts">
+	import { Avatar as AvatarPrimitive } from "bits-ui"
+	import { cn } from "$lib/shared/utils/ui"
+
+	let {
+		ref = $bindable(null),
+		loadingStatus = $bindable("loading"),
+		size = "default",
+		class: className,
+		...restProps
+	}: AvatarPrimitive.RootProps & {
+		size?: "default" | "sm" | "lg"
+	} = $props()
+</script>
+
+<AvatarPrimitive.Root
+	bind:ref
+	bind:loadingStatus
+	data-slot="avatar"
+	data-size={size}
+	class={cn(
+		"after:border-border group/avatar relative flex size-8 shrink-0 rounded-full select-none after:absolute after:inset-0 after:rounded-full after:border after:mix-blend-darken data-[size=lg]:size-10 data-[size=sm]:size-6 dark:after:mix-blend-lighten",
+		className,
+	)}
+	{...restProps}
+/>
+</file>
+
+<file path="src/lib/shared/ui/avatar/index.ts">
+import Root from "./avatar.svelte"
+import Image from "./avatar-image.svelte"
+import Fallback from "./avatar-fallback.svelte"
+import Badge from "./avatar-badge.svelte"
+import Group from "./avatar-group.svelte"
+import GroupCount from "./avatar-group-count.svelte"
+
+export {
+	Root,
+	Image,
+	Fallback,
+	Badge,
+	Group,
+	GroupCount,
+	//
+	Root as Avatar,
+	Image as AvatarImage,
+	Fallback as AvatarFallback,
+	Badge as AvatarBadge,
+	Group as AvatarGroup,
+	GroupCount as AvatarGroupCount,
+}
+</file>
+
+<file path="src/lib/shared/ui/badge/badge-variants.ts">
+import { type VariantProps, tv } from "tailwind-variants"
+
+export const badgeVariants = tv({
+	base: "h-5 gap-1 rounded-3xl border border-transparent px-2 py-0.5 text-xs font-medium transition-all has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&>svg]:size-3! focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive group/badge inline-flex w-fit shrink-0 items-center justify-center overflow-hidden whitespace-nowrap transition-colors focus-visible:ring-[3px] [&>svg]:pointer-events-none",
+	variants: {
+		variant: {
+			default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
+			secondary: "bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",
+			destructive:
+				"bg-destructive/10 [a]:hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 text-destructive dark:bg-destructive/20",
+			outline: "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
+			ghost: "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
+			link: "text-primary underline-offset-4 hover:underline",
+		},
+	},
+	defaultVariants: {
+		variant: "default",
+	},
+})
+
+export type BadgeVariant = VariantProps<typeof badgeVariants>["variant"]
+</file>
+
+<file path="src/lib/shared/ui/badge/badge.svelte">
+<script lang="ts" module>
+	export { badgeVariants, type BadgeVariant } from "./badge-variants.js"
+</script>
+
+<script lang="ts">
+	import type { HTMLAnchorAttributes } from "svelte/elements"
+	import { cn, type WithElementRef } from "$lib/shared/utils/ui"
+	import { badgeVariants, type BadgeVariant } from "./badge-variants.js"
+
+	let {
+		ref = $bindable(null),
+		href,
+		class: className,
+		variant = "default",
+		children,
+		...restProps
+	}: WithElementRef<HTMLAnchorAttributes> & {
+		variant?: BadgeVariant
+	} = $props()
+</script>
+
+<svelte:element
+	this={href ? "a" : "span"}
+	bind:this={ref}
+	data-slot="badge"
+	{href}
+	class={cn(badgeVariants({ variant }), className)}
+	{...restProps}
+>
+	{@render children?.()}
+</svelte:element>
+</file>
+
+<file path="src/lib/shared/ui/badge/index.ts">
+export { default as Badge } from "./badge.svelte"
+export { badgeVariants, type BadgeVariant } from "./badge-variants.js"
+</file>
+
+<file path="src/lib/shared/ui/button/button-variants.ts">
+import { type WithElementRef } from "$lib/shared/utils/ui"
+import type { HTMLAnchorAttributes, HTMLButtonAttributes } from "svelte/elements"
+import { type VariantProps, tv } from "tailwind-variants"
+
+export const buttonVariants = tv({
+	base: "focus-visible:border-ring focus-visible:ring-ring/30 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 rounded-4xl border border-transparent bg-clip-padding text-sm font-medium focus-visible:ring-3 active:not-aria-[haspopup]:translate-y-px aria-invalid:ring-3 [&_svg:not([class*='size-'])]:size-4 group/button inline-flex shrink-0 items-center justify-center whitespace-nowrap transition-all outline-none select-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+	variants: {
+		variant: {
+			default: "bg-primary text-primary-foreground hover:bg-primary/80",
+			outline:
+				"border-border bg-background hover:bg-muted hover:text-foreground dark:hover:bg-input/30 aria-expanded:bg-muted aria-expanded:text-foreground dark:bg-transparent",
+			secondary:
+				"bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+			ghost:
+				"hover:bg-muted hover:text-foreground dark:hover:bg-muted/50 aria-expanded:bg-muted aria-expanded:text-foreground",
+			destructive:
+				"bg-destructive/10 hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/20 text-destructive focus-visible:border-destructive/40 dark:hover:bg-destructive/30",
+			link: "text-primary underline-offset-4 hover:underline",
+		},
+		size: {
+			default:
+				"h-9 gap-1.5 px-3 has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5",
+			xs: "h-6 gap-1 px-2.5 text-xs has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3",
+			sm: "h-8 gap-1 px-3 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
+			lg: "h-10 gap-1.5 px-4 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
+			icon: "size-9",
+			"icon-xs": "size-6 [&_svg:not([class*='size-'])]:size-3",
+			"icon-sm": "size-8",
+			"icon-lg": "size-10",
+		},
+	},
+	defaultVariants: {
+		variant: "default",
+		size: "default",
+	},
+})
+
+export type ButtonVariant = VariantProps<typeof buttonVariants>["variant"]
+export type ButtonSize = VariantProps<typeof buttonVariants>["size"]
+
+export type ButtonProps = WithElementRef<HTMLButtonAttributes> &
+	WithElementRef<HTMLAnchorAttributes> & {
+		variant?: ButtonVariant
+		size?: ButtonSize
+	}
+</file>
+
+<file path="src/lib/shared/ui/button/button.svelte">
+<script lang="ts" module>
+	export {
+		buttonVariants,
+		type ButtonVariant,
+		type ButtonSize,
+		type ButtonProps,
+	} from "./button-variants.js"
+</script>
+
+<script lang="ts">
+	import { cn } from "$lib/shared/utils/ui"
+	import { buttonVariants, type ButtonProps } from "./button-variants.js"
+
+	let {
+		class: className,
+		variant = "default",
+		size = "default",
+		ref = $bindable(null),
+		href = undefined,
+		type = "button",
+		disabled,
+		children,
+		...restProps
+	}: ButtonProps = $props()
+</script>
+
+{#if href}
+	<a
+		bind:this={ref}
+		data-slot="button"
+		class={cn(buttonVariants({ variant, size }), className)}
+		href={disabled ? undefined : href}
+		aria-disabled={disabled}
+		role={disabled ? "link" : undefined}
+		tabindex={disabled ? -1 : undefined}
+		{...restProps}
+	>
+		{@render children?.()}
+	</a>
+{:else}
+	<button
+		bind:this={ref}
+		data-slot="button"
+		class={cn(buttonVariants({ variant, size }), className)}
+		{type}
+		{disabled}
+		{...restProps}
+	>
+		{@render children?.()}
+	</button>
+{/if}
+</file>
+
+<file path="src/lib/shared/ui/button/index.ts">
+import Root from "./button.svelte"
+import {
+	buttonVariants,
+	type ButtonProps,
+	type ButtonSize,
+	type ButtonVariant,
+} from "./button-variants.js"
+
+export {
+	Root,
+	type ButtonProps as Props,
+	//
+	Root as Button,
+	buttonVariants,
+	type ButtonProps,
+	type ButtonSize,
+	type ButtonVariant,
+}
+</file>
+
+<file path="src/lib/shared/ui/card/card-action.svelte">
+<script lang="ts">
+	import { cn, type WithElementRef } from "$lib/shared/utils/ui"
+	import type { HTMLAttributes } from "svelte/elements"
+
+	let {
+		ref = $bindable(null),
+		class: className,
+		children,
+		...restProps
+	}: WithElementRef<HTMLAttributes<HTMLDivElement>> = $props()
+</script>
+
+<div
+	bind:this={ref}
+	data-slot="card-action"
+	class={cn(
+		"cn-card-action col-start-2 row-span-2 row-start-1 self-start justify-self-end",
+		className,
+	)}
+	{...restProps}
+>
+	{@render children?.()}
+</div>
+</file>
+
+<file path="src/lib/shared/ui/card/card-content.svelte">
+<script lang="ts">
+	import type { HTMLAttributes } from "svelte/elements"
+	import { cn, type WithElementRef } from "$lib/shared/utils/ui"
+
+	let {
+		ref = $bindable(null),
+		class: className,
+		children,
+		...restProps
+	}: WithElementRef<HTMLAttributes<HTMLDivElement>> = $props()
+</script>
+
+<div
+	bind:this={ref}
+	data-slot="card-content"
+	class={cn("px-6 group-data-[size=sm]/card:px-4", className)}
+	{...restProps}
+>
+	{@render children?.()}
+</div>
+</file>
+
+<file path="src/lib/shared/ui/card/card-description.svelte">
+<script lang="ts">
+	import type { HTMLAttributes } from "svelte/elements"
+	import { cn, type WithElementRef } from "$lib/shared/utils/ui"
+
+	let {
+		ref = $bindable(null),
+		class: className,
+		children,
+		...restProps
+	}: WithElementRef<HTMLAttributes<HTMLParagraphElement>> = $props()
+</script>
+
+<p
+	bind:this={ref}
+	data-slot="card-description"
+	class={cn("text-muted-foreground text-sm", className)}
+	{...restProps}
+>
+	{@render children?.()}
+</p>
+</file>
+
+<file path="src/lib/shared/ui/card/card-footer.svelte">
+<script lang="ts">
+	import { cn, type WithElementRef } from "$lib/shared/utils/ui"
+	import type { HTMLAttributes } from "svelte/elements"
+
+	let {
+		ref = $bindable(null),
+		class: className,
+		children,
+		...restProps
+	}: WithElementRef<HTMLAttributes<HTMLDivElement>> = $props()
+</script>
+
+<div
+	bind:this={ref}
+	data-slot="card-footer"
+	class={cn(
+		"flex items-center rounded-b-4xl px-6 group-data-[size=sm]/card:px-4 [.border-t]:pt-6 group-data-[size=sm]/card:[.border-t]:pt-4",
+		className,
+	)}
+	{...restProps}
+>
+	{@render children?.()}
+</div>
+</file>
+
+<file path="src/lib/shared/ui/card/card-header.svelte">
+<script lang="ts">
+	import { cn, type WithElementRef } from "$lib/shared/utils/ui"
+	import type { HTMLAttributes } from "svelte/elements"
+
+	let {
+		ref = $bindable(null),
+		class: className,
+		children,
+		...restProps
+	}: WithElementRef<HTMLAttributes<HTMLDivElement>> = $props()
+</script>
+
+<div
+	bind:this={ref}
+	data-slot="card-header"
+	class={cn(
+		"group/card-header @container/card-header grid auto-rows-min items-start gap-1.5 rounded-t-4xl px-6 group-data-[size=sm]/card:px-4 has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-6 group-data-[size=sm]/card:[.border-b]:pb-4",
+		className,
+	)}
+	{...restProps}
+>
+	{@render children?.()}
+</div>
+</file>
+
+<file path="src/lib/shared/ui/card/card-title.svelte">
+<script lang="ts">
+	import type { HTMLAttributes } from "svelte/elements"
+	import { cn, type WithElementRef } from "$lib/shared/utils/ui"
+
+	let {
+		ref = $bindable(null),
+		class: className,
+		children,
+		...restProps
+	}: WithElementRef<HTMLAttributes<HTMLDivElement>> = $props()
+</script>
+
+<div
+	bind:this={ref}
+	data-slot="card-title"
+	class={cn("text-base font-medium", className)}
+	{...restProps}
+>
+	{@render children?.()}
+</div>
+</file>
+
+<file path="src/lib/shared/ui/card/card.svelte">
+<script lang="ts">
+	import type { HTMLAttributes } from "svelte/elements"
+	import { cn, type WithElementRef } from "$lib/shared/utils/ui"
+
+	let {
+		ref = $bindable(null),
+		class: className,
+		children,
+		size = "default",
+		...restProps
+	}: WithElementRef<HTMLAttributes<HTMLDivElement>> & { size?: "default" | "sm" } = $props()
+</script>
+
+<div
+	bind:this={ref}
+	data-slot="card"
+	data-size={size}
+	class={cn(
+		"bg-card text-card-foreground ring-foreground/5 dark:ring-foreground/10 group/card flex flex-col gap-6 overflow-hidden rounded-4xl py-6 text-sm shadow-md ring-1 has-[>img:first-child]:pt-0 data-[size=sm]:gap-4 data-[size=sm]:py-4 *:[img:first-child]:rounded-t-4xl *:[img:last-child]:rounded-b-4xl",
+		className,
+	)}
+	{...restProps}
+>
+	{@render children?.()}
+</div>
+</file>
+
+<file path="src/lib/shared/ui/card/index.ts">
+import Root from "./card.svelte"
+import Content from "./card-content.svelte"
+import Description from "./card-description.svelte"
+import Footer from "./card-footer.svelte"
+import Header from "./card-header.svelte"
+import Title from "./card-title.svelte"
+import Action from "./card-action.svelte"
+
+export {
+	Root,
+	Content,
+	Description,
+	Footer,
+	Header,
+	Title,
+	Action,
+	//
+	Root as Card,
+	Content as CardContent,
+	Description as CardDescription,
+	Footer as CardFooter,
+	Header as CardHeader,
+	Title as CardTitle,
+	Action as CardAction,
+}
+</file>
+
+<file path="src/lib/shared/ui/input/index.ts">
+import Root from "./input.svelte"
+
+export {
+	Root,
+	//
+	Root as Input,
+}
+</file>
+
+<file path="src/lib/shared/ui/input/input.svelte">
+<script lang="ts">
+	import type { HTMLInputAttributes, HTMLInputTypeAttribute } from "svelte/elements"
+	import { cn, type WithElementRef } from "$lib/shared/utils/ui"
+
+	type InputType = Exclude<HTMLInputTypeAttribute, "file">
+
+	type Props = WithElementRef<
+		Omit<HTMLInputAttributes, "type"> &
+			({ type: "file"; files?: FileList } | { type?: InputType; files?: undefined })
+	>
+
+	let {
+		ref = $bindable(null),
+		value = $bindable(),
+		type,
+		files = $bindable(),
+		class: className,
+		"data-slot": dataSlot = "input",
+		...restProps
+	}: Props = $props()
+</script>
+
+{#if type === "file"}
+	<input
+		bind:this={ref}
+		data-slot={dataSlot}
+		class={cn(
+			"bg-input/50 focus-visible:border-ring focus-visible:ring-ring/30 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 file:text-foreground placeholder:text-muted-foreground h-9 w-full min-w-0 rounded-3xl border border-transparent px-3 py-1 text-base transition-[color,box-shadow,background-color] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-3 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:ring-3 md:text-sm",
+			className,
+		)}
+		type="file"
+		bind:files
+		bind:value
+		{...restProps}
+	/>
+{:else}
+	<input
+		bind:this={ref}
+		data-slot={dataSlot}
+		class={cn(
+			"bg-input/50 focus-visible:border-ring focus-visible:ring-ring/30 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 file:text-foreground placeholder:text-muted-foreground h-9 w-full min-w-0 rounded-3xl border border-transparent px-3 py-1 text-base transition-[color,box-shadow,background-color] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-3 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:ring-3 md:text-sm",
+			className,
+		)}
+		{type}
+		bind:value
+		{...restProps}
+	/>
+{/if}
+</file>
+
+<file path="src/lib/shared/ui/separator/index.ts">
+import Root from "./separator.svelte"
+
+export {
+	Root,
+	//
+	Root as Separator,
+}
+</file>
+
+<file path="src/lib/shared/ui/separator/separator.svelte">
+<script lang="ts">
+	import { Separator as SeparatorPrimitive } from "bits-ui"
+	import { cn } from "$lib/shared/utils/ui"
+
+	let {
+		ref = $bindable(null),
+		class: className,
+		"data-slot": dataSlot = "separator",
+		...restProps
+	}: SeparatorPrimitive.RootProps = $props()
+</script>
+
+<SeparatorPrimitive.Root
+	bind:ref
+	data-slot={dataSlot}
+	class={cn(
+		"bg-border shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:w-px",
+		"data-[orientation=vertical]:h-full",
+		className,
+	)}
+	{...restProps}
+/>
+</file>
+
+<file path="src/lib/shared/ui/skeleton/DashboardSkeleton.svelte">
+<div class="dashboard fade-in-up">
+	<div class="col">
+		<div class="glass flex items-start gap-3 overflow-hidden rounded-2xl p-4 sm:gap-5 sm:p-6">
+			<div class="shimmer h-16 w-16 shrink-0 rounded-2xl sm:h-20 sm:w-20"></div>
+			<div class="flex flex-1 flex-col gap-2.5 pt-1">
+				<div class="shimmer h-6 w-40 rounded-lg"></div>
+				<div class="shimmer h-3 w-full rounded-md opacity-60"></div>
+				<div class="shimmer h-3 w-2/3 rounded-md opacity-60"></div>
+			</div>
+		</div>
+		<div class="flex flex-col gap-3">
+			<div class="grid grid-cols-2 gap-3">
+				{#each [0, 1] as i}
+					<div
+						class="shimmer h-24 rounded-2xl"
+						style="background:color-mix(in srgb, var(--surface) 60%, transparent);
+                   border:1px solid color-mix(in srgb, var(--highlight-med) 10%, transparent);
+                   animation-delay:{i * 60}ms"
+					></div>
+				{/each}
+			</div>
+			<div class="grid grid-cols-3 gap-2 sm:gap-2.5">
+				{#each [0, 1, 2, 3, 4, 5] as i}
+					<div
+						class="shimmer h-20 rounded-[14px]"
+						style="background:color-mix(in srgb, var(--surface) 60%, transparent);
+                   border:1px solid color-mix(in srgb, var(--highlight-med) 10%, transparent);
+                   animation-delay:{i * 60}ms"
+					></div>
+				{/each}
+			</div>
+		</div>
+	</div>
+	<div class="col">
+		<div class="glass overflow-hidden rounded-2xl">
+			<div class="p-4 pb-0 sm:p-5">
+				<div class="flex items-center gap-2">
+					<div class="shimmer h-2.5 w-20 rounded-md"></div>
+					<div
+						class="h-px flex-1"
+						style="background:color-mix(in srgb, var(--subtle) 10%, transparent)"
+					></div>
+					<div class="shimmer h-5 w-14 rounded-full"></div>
+				</div>
+			</div>
+			<div class="p-4 pt-4 sm:p-5">
+				<div class="flex flex-col items-start gap-4 sm:flex-row sm:gap-5">
+					<div
+						class="shimmer h-[160px] w-[160px] shrink-0 rounded-full sm:h-[200px] sm:w-[200px]"
+					></div>
+					<div class="flex w-full flex-col gap-0.5">
+						{#each [0, 1, 2, 3, 4] as i}
+							<div class="flex items-center gap-2 px-1.5 py-1" style="animation-delay:{i * 60}ms">
+								<div class="shimmer h-6 w-6 shrink-0 rounded-md"></div>
+								<div class="shimmer h-3 flex-1 rounded-md"></div>
+								<div class="shimmer h-[3px] w-[60px] rounded-full"></div>
+								<div class="shimmer h-2.5 w-7 rounded-full"></div>
+							</div>
+						{/each}
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="glass overflow-hidden rounded-2xl">
+			<div class="p-5">
+				<div class="flex items-start justify-between gap-4">
+					<div class="flex flex-1 flex-col gap-2">
+						<div class="shimmer h-2 w-28 rounded-md"></div>
+						<div class="shimmer h-5 w-40 rounded-lg"></div>
+						<div class="shimmer mt-1 h-6 w-20 rounded-lg"></div>
+					</div>
+					<div class="shimmer h-8 w-8 shrink-0 rounded-xl"></div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<style>
+	.dashboard {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 16px;
+		width: 100%;
+		max-width: 1100px;
+		margin: 0 auto;
+		touch-action: pan-y pinch-zoom;
+	}
+	@media (min-width: 860px) {
+		.dashboard {
+			grid-template-columns: 1.05fr 1fr;
+			align-items: start;
+		}
+	}
+	.col {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+		touch-action: pan-y;
+	}
+	@media (max-width: 640px) {
+		.dashboard {
+			gap: 12px;
+		}
+		.col {
+			gap: 12px;
+		}
+	}
+</style>
+</file>
+
+<file path="src/lib/shared/ui/sonner/index.ts">
+export { default as Toaster } from "./sonner.svelte"
+</file>
+
+<file path="src/lib/shared/ui/sonner/sonner.svelte">
+<script lang="ts">
+	import { Toaster as Sonner, type ToasterProps as SonnerProps } from "svelte-sonner"
+	import { mode } from "mode-watcher"
+	import Loader2Icon from "@lucide/svelte/icons/loader-2"
+	import CircleCheckIcon from "@lucide/svelte/icons/circle-check"
+	import OctagonXIcon from "@lucide/svelte/icons/octagon-x"
+	import InfoIcon from "@lucide/svelte/icons/info"
+	import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert"
+
+	let { ...restProps }: SonnerProps = $props()
+</script>
+
+<Sonner
+	theme={mode.current}
+	class="toaster group"
+	style="--normal-bg: var(--color-popover); --normal-text: var(--color-popover-foreground); --normal-border: var(--color-border);"
+	{...restProps}
+>
+	{#snippet loadingIcon()}
+		<Loader2Icon class="size-4 animate-spin" />
+	{/snippet}
+	{#snippet successIcon()}
+		<CircleCheckIcon class="size-4" />
+	{/snippet}
+	{#snippet errorIcon()}
+		<OctagonXIcon class="size-4" />
+	{/snippet}
+	{#snippet infoIcon()}
+		<InfoIcon class="size-4" />
+	{/snippet}
+	{#snippet warningIcon()}
+		<TriangleAlertIcon class="size-4" />
+	{/snippet}
+</Sonner>
+</file>
+
+<file path="src/lib/shared/utils/format.ts">
+export function formatNumber(n: number): string {
+	if (!Number.isFinite(n) || n < 0) return "0"
+
+	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+	if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+
+	return String(Math.floor(n))
+}
+
+export function accountAge(createdAt: string): string {
+	if (!createdAt) return "unknown"
+
+	const created = new Date(createdAt)
+	if (isNaN(created.getTime())) return "unknown"
+
+	const years = new Date().getFullYear() - created.getFullYear()
+
+	if (years <= 0) return "< 1 year"
+	return years === 1 ? "1 year" : `${years} years`
+}
+</file>
+
+<file path="src/lib/shared/utils/icons.ts">
+const SIMPLE_ICONS: Readonly<Record<string, string>> = {
+	TypeScript: "typescript",
+	JavaScript: "javascript",
+	Python: "python",
+	Rust: "rust",
+	Go: "go",
+	Ruby: "ruby",
+	Kotlin: "kotlin",
+	Swift: "swift",
+	C: "c",
+	"C++": "cplusplus",
+	"C#": "csharp",
+	PHP: "php",
+	Dart: "dart",
+	Scala: "scala",
+	Elixir: "elixir",
+	Haskell: "haskell",
+	Lua: "lua",
+	Shell: "gnubash",
+	Bash: "gnubash",
+	HTML: "html5",
+	CSS: "css",
+	SCSS: "sass",
+	Sass: "sass",
+	Vue: "vuedotjs",
+	Svelte: "svelte",
+	Astro: "astro",
+	Dockerfile: "docker",
+	Nix: "nixos",
+	Zig: "zig",
+	Clojure: "clojure",
+	Erlang: "erlang",
+	R: "r",
+	Julia: "julia",
+	Perl: "perl",
+	OCaml: "ocaml",
+	"F#": "fsharp",
+	Groovy: "apachegroovy",
+	Markdown: "markdown",
+} as const
+
+const DIRECT_ICONS: Readonly<Record<string, string>> = {
+	Java: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/java/java-original.svg",
+} as const
+
+export function langIconUrl(name: string): string {
+	if (DIRECT_ICONS[name]) return DIRECT_ICONS[name]
+	const slug = SIMPLE_ICONS[name]
+	return slug ? `https://cdn.simpleicons.org/${slug}` : ""
+}
+
+export function hideImgOnError(e: Event): void {
+	const img = e.currentTarget as HTMLImageElement
+	img.style.display = "none"
+	const fallback = img.nextElementSibling as HTMLElement | null
+	if (fallback) fallback.style.display = "block"
+}
+</file>
+
+<file path="src/lib/shared/utils/tilt.ts">
+export interface TiltState {
+	rotX: number
+	rotY: number
+	px: number
+	py: number
+	active: boolean
+}
+
+const TILT_MAX_DEG = 12
+
+export function neutralTilt(): TiltState {
+	return { rotX: 0, rotY: 0, px: 50, py: 50, active: false }
+}
+
+export function applyTilt(e: MouseEvent, target: HTMLElement): TiltState {
+	if (isTouchDevice()) return neutralTilt()
+
+	const rect = target.getBoundingClientRect()
+	if (rect.width === 0 || rect.height === 0) return neutralTilt()
+
+	const dx = (e.clientX - (rect.left + rect.width / 2)) / (rect.width / 2)
+	const dy = (e.clientY - (rect.top + rect.height / 2)) / (rect.height / 2)
+
+	return {
+		rotX: -dy * TILT_MAX_DEG,
+		rotY: dx * TILT_MAX_DEG,
+		px: ((e.clientX - rect.left) / rect.width) * 100,
+		py: ((e.clientY - rect.top) / rect.height) * 100,
+		active: true,
+	}
+}
+
+export function tiltStyle(t: TiltState): string {
+	if (!t.active) {
+		return [
+			"border-color: rgba(144,140,170,0.15)",
+			"box-shadow: 0 1px 0 0 rgba(224,222,244,0.05) inset, 0 4px 16px -4px rgba(0,0,0,0.35)",
+			"transform: perspective(600px) rotateX(0deg) rotateY(0deg) translateZ(0)",
+			"will-change: transform",
+			"transition: transform 0.10s ease, box-shadow 0.10s ease, border-color 0.10s ease",
+		].join(";")
+	}
+
+	const shadowX = (-t.rotY * 1.6).toFixed(1)
+	const shadowY = (t.rotX * 1.6).toFixed(1)
+
+	return [
+		"border-color: rgba(144,140,170,0.28)",
+		`box-shadow: ${shadowX}px ${shadowY}px 28px rgba(0,0,0,0.4),` +
+			" 0 0 0 1px rgba(196,167,231,0.14)",
+		`transform: perspective(600px) rotateX(${t.rotX}deg)` +
+			` rotateY(${t.rotY}deg) translateZ(8px)`,
+		"will-change: transform",
+		"transition: transform 0.10s ease, box-shadow 0.10s ease, border-color 0.10s ease",
+	].join(";")
+}
+
+export function shineStyle(t: TiltState): string {
+	if (!t.active) return ""
+	return (
+		`background: radial-gradient(circle at ${t.px}% ${t.py}%,` +
+		" rgba(255,255,255,0.09) 0%, transparent 55%)"
+	)
+}
+
+function isTouchDevice(): boolean {
+	return typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches
+}
+</file>
+
+<file path="src/lib/shared/utils/ui.ts">
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: ClassValue[]) {
+	return twMerge(clsx(inputs))
+}
+
+export type WithElementRef<T, TElement extends Element = Element> = T & {
+	ref?: TElement | null
+}
+</file>
+
+<file path="static/favicon.svg">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <rect width="48" height="48" rx="10" fill="#1e1b2e"/>
+  <circle cx="21" cy="21" r="9" fill="none" stroke="#a89fe8" stroke-width="3"/>
+  <line x1="28" y1="28" x2="38" y2="38" stroke="#7ecfba" stroke-width="3.5" stroke-linecap="round"/>
+</svg>
+</file>
+
+<file path="static/googlea093edd0a51afb26.html">
+google-site-verification: googlea093edd0a51afb26.html
+</file>
+
+<file path="static/robots.txt">
+# allow crawling everything by default
+User-agent: *
+Disallow:
+</file>
+
+<file path=".npmrc">
+engine-strict=true
+</file>
+
+<file path="components.json">
+{
+	"$schema": "https://shadcn-svelte.com/schema.json",
+	"tailwind": {
+		"css": "src/app.css",
+		"baseColor": "neutral"
+	},
+	"aliases": {
+		"components": "$lib/components",
+		"utils": "$lib/utils",
+		"ui": "$lib/components/ui",
+		"hooks": "$lib/hooks",
+		"lib": "$lib"
+	},
+	"typescript": true,
+	"registry": "https://shadcn-svelte.com/registry",
+	"style": "luma",
+	"iconLibrary": "lucide",
+	"menuColor": "default",
+	"menuAccent": "subtle"
+}
+</file>
+
+<file path="tsconfig.json">
+{
+	"extends": "./.svelte-kit/tsconfig.json",
+	"compilerOptions": {
+		"rewriteRelativeImportExtensions": true,
+		"allowJs": true,
+		"checkJs": true,
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"resolveJsonModule": true,
+		"skipLibCheck": true,
+		"sourceMap": true,
+		"strict": true,
+		"moduleResolution": "bundler"
+	}
+	// Path aliases are handled by https://svelte.dev/docs/kit/configuration#alias
+	// except $lib which is handled by https://svelte.dev/docs/kit/configuration#files
+	//
+	// To make changes to top-level options such as include and exclude, we recommend extending
+	// the generated config; see https://svelte.dev/docs/kit/configuration#typescript
+}
+</file>
+
+<file path="src/lib/entities/github/model/github-stats.ts">
+import { z } from "zod"
+
+export const GitHubLanguageSchema = z.object({
+	name: z.string(),
+	percentage: z.number(),
+	color: z.string().optional(),
+})
+
+export const MostStarredRepoSchema = z.object({
+	name: z.string(),
+	stars: z.number(),
+	url: z.string().url(),
+})
+
+export const InvolvedRepoSchema = z.object({
+	name: z.string(),
+	owner: z.string(),
+	url: z.string().url(),
+	lastContributedAt: z.string(),
+	stars: z.number().optional(),
+	primaryLanguage: z.string().nullable().optional(),
+})
+
+export const GithubStatsSchema = z.object({
+	totalRepos: z.number(),
+	totalContributions: z.number(),
+	totalStars: z.number(),
+	followers: z.number(),
+	following: z.number(),
+	totalCommits: z.number(),
+	totalPrs: z.number(),
+	totalIssues: z.number(),
+	accountCreatedAt: z.string(),
+	mostStarredRepo: MostStarredRepoSchema.nullable(),
+	avatarUrl: z.string().url(),
+	displayName: z.string(),
+	bio: z.string(),
+	languages: z.array(GitHubLanguageSchema),
+	involvedRepos: z.array(InvolvedRepoSchema).optional(), // Bound to the main stats schema
+})
+
+export type GitHubLanguage = z.infer<typeof GitHubLanguageSchema>
+export type MostStarredRepo = z.infer<typeof MostStarredRepoSchema>
+export type InvolvedRepo = z.infer<typeof InvolvedRepoSchema>
+export type GithubStats = z.infer<typeof GithubStatsSchema>
+</file>
+
+<file path="src/lib/features/exporter/DonutChart.svelte">
+<script lang="ts">
+	import { arcPath } from "$lib/entities/github/ui/useLanguagePie.svelte"
+
+	interface Slice {
+		color: string
+		startDeg: number
+		endDeg: number
+	}
+
+	let {
+		size,
+		ro,
+		ri,
+		slices,
+		u,
+		variant = "landscape",
+	}: {
+		size: number
+		ro: number
+		ri: number
+		slices: Slice[]
+		u: number
+		variant?: "landscape" | "portrait"
+	} = $props()
+
+	const portrait = $derived(variant === "portrait")
+	const cx = $derived(size / 2)
+	const cy = $derived(size / 2)
+	const filterId = $derived(portrait ? "glow-p" : "glow-l")
+	const glowStd = $derived(portrait ? u * 0.8 : u * 0.6)
+	const countSize = $derived(portrait ? u * 1.1 : u * 0.85)
+	const countY = $derived(portrait ? cy - u * 0.8 : cy - u * 0.6)
+	const labelSize = $derived(portrait ? u * 0.9 : u * 0.68)
+	const labelY = $derived(portrait ? cy + u * 1.5 : cy + u * 1.1)
+</script>
+
+<svg width={size} height={size} viewBox="0 0 {size} {size}" class="donut-svg">
+	<defs>
+		<filter id={filterId} x="-30%" y="-30%" width="160%" height="160%">
+			<feGaussianBlur in="SourceGraphic" stdDeviation={glowStd} result="blur" />
+
+			<feMerge>
+				<feMergeNode in="blur" />
+				<feMergeNode in="SourceGraphic" />
+			</feMerge>
+		</filter>
+	</defs>
+
+	<circle
+		{cx}
+		{cy}
+		r={(ro + ri) / 2}
+		fill="none"
+		stroke="rgba(144,140,170,0.1)"
+		stroke-width={ro - ri + 1}
+	/>
+
+	<g filter="url(#{filterId})">
+		{#each slices as s}
+			<path d={arcPath(cx, cy, ro, ri, s.startDeg, s.endDeg)} fill={s.color} />
+		{/each}
+	</g>
+
+	<circle {cx} {cy} r={ri - 2} fill="var(--base)" />
+
+	<circle
+		{cx}
+		{cy}
+		r={ri - 2}
+		fill="none"
+		stroke-width="1.5"
+		stroke="color-mix(in srgb, var(--iris) 25%, transparent)"
+	/>
+
+	<text
+		x={cx}
+		y={countY}
+		text-anchor="middle"
+		dominant-baseline="middle"
+		font-size={countSize}
+		font-family="DM Mono,monospace"
+		letter-spacing="0.06em"
+		fill="var(--subtle)"
+	>
+		{slices.length}
+	</text>
+
+	<text
+		x={cx}
+		y={labelY}
+		text-anchor="middle"
+		dominant-baseline="middle"
+		font-size={labelSize}
+		font-family="DM Mono,monospace"
+		letter-spacing="0.1em"
+		fill="var(--muted)"
+	>
+		LANGUAGES
+	</text>
+</svg>
+
+<style>
+	.donut-svg {
+		flex-shrink: 0;
+		overflow: visible;
+	}
+</style>
+</file>
+
+<file path="src/lib/features/search/EmptyState.svelte">
+<script lang="ts">
+	import { UserX } from "lucide-svelte"
+
+	let { username }: { username: string } = $props()
+</script>
+
+<div
+	class="
+  glass fade-in-up flex w-full max-w-sm flex-col
+  items-center gap-4 rounded-2xl px-8 py-12 text-center
+"
+>
+	<div
+		class="
+    bg-surface border-highlight-med mb-2 flex h-12 w-12 items-center
+    justify-center rounded-full border
+  "
+	>
+		<UserX class="text-muted h-6 w-6" />
+	</div>
+	<div>
+		<h3 class="text-rp-text mb-1 text-lg font-medium">User not found</h3>
+		<p class="text-subtle font-mono text-sm leading-relaxed">
+			No GitHub profile for
+			<span class="text-rp-text font-semibold">@{username}</span>. Check the spelling and try again.
+		</p>
+	</div>
+</div>
+</file>
+
+<file path="src/lib/features/search/useSearch.svelte.ts">
+import { toast } from "svelte-sonner"
+import { fetchGithubStats } from "$lib/entities/github/api/github"
+import type { GithubStats } from "$lib/entities/github/model/github-stats"
+
+export function useSearch() {
+	let stats = $state<GithubStats | null>(null)
+	let isLoading = $state(false)
+	let hasSearched = $state(false)
+	let currentUsername = $state("")
+
+	async function performSearch(username: string) {
+		isLoading = true
+		stats = null
+		hasSearched = true
+		currentUsername = username
+
+		const result = await fetchGithubStats(username)
+		isLoading = false
+
+		if (result.ok) {
+			stats = result.data
+		} else {
+			toast.error(result.error)
+		}
+	}
+
+	return {
+		get stats() {
+			return stats
+		},
+		get loading() {
+			return isLoading
+		},
+		get searched() {
+			return hasSearched
+		},
+		get currentUsername() {
+			return currentUsername
+		},
+		get noResults() {
+			return hasSearched && !isLoading && !stats
+		},
+		onSearch: performSearch,
+	}
+}
+</file>
+
+<file path="src/lib/features/theme/ThemeCustomizer.svelte">
+<script lang="ts">
+	import { onMount } from "svelte"
+	import {
+		TOKEN_LABELS,
+		PRESET_THEMES,
+		getTokens,
+		applyTokens,
+		applyPreset as applyPresetTheme,
+		getSavedPresetName,
+		parseThemeFromCSS,
+		type ThemeTokens,
+	} from "$lib/shared/utils/theme"
+	import { Palette, RotateCcw, ChevronDown } from "lucide-svelte"
+
+	let open = $state(false)
+	let tokens = $state<ThemeTokens>({ ...PRESET_THEMES["Rosé Pine"] })
+	let activePreset = $state<string | null>(null)
+	let activeKey = $state<string | null>(null)
+
+	const tokenKeys = Object.keys(TOKEN_LABELS)
+
+	onMount(async () => {
+		tokens = { ...getTokens() }
+		activePreset = getSavedPresetName() ?? "Rosé Pine"
+		await import("vanilla-colorful/hex-color-picker.js")
+	})
+
+	function update(key: string, val: string) {
+		tokens = { ...tokens, [key]: val }
+		activePreset = null
+		applyTokens(tokens)
+	}
+
+	function applyPreset(name: string) {
+		activePreset = name
+		tokens = { ...PRESET_THEMES[name] }
+		applyPresetTheme(name)
+	}
+
+	function reset() {
+		applyPreset("Rosé Pine")
+	}
+
+	function importCSS(e: Event) {
+		const file = (e.target as HTMLInputElement).files?.[0]
+		if (!file) return
+		const reader = new FileReader()
+		reader.onload = () => {
+			const css = reader.result as string
+			const parsed = parseThemeFromCSS(css)
+			if (Object.keys(parsed).length === 0) {
+				alert("No theme tokens found in CSS file.")
+				return
+			}
+			tokens = { ...PRESET_THEMES["Rosé Pine"], ...parsed } as ThemeTokens
+			activePreset = null
+			applyTokens(tokens)
+		}
+		reader.readAsText(file)
+	}
+
+	function exportCSS() {
+		const lines = [
+			"/* GitPeak Custom Theme */",
+			"/* Import this file in the theme customizer */",
+			"",
+			":root {",
+			...Object.entries(tokens).map(([key, val]) => `  --${key}: ${val};`),
+			"}",
+		]
+		const blob = new Blob([lines.join("\n")], { type: "text/css" })
+		const url = URL.createObjectURL(blob)
+		const a = document.createElement("a")
+		a.href = url
+		a.download = "gitpeak-theme.css"
+		a.click()
+		URL.revokeObjectURL(url)
+	}
+
+	function onPickerChange(e: Event, key: string) {
+		const val = (e as CustomEvent).detail.value
+		if (val) update(key, val)
+	}
+</script>
+
+<!-- Toggle button -->
+<button
+	onclick={() => (open = !open)}
+	class="glass flex items-center gap-2 rounded-xl border px-3 py-2 font-mono text-xs tracking-wide uppercase transition-all duration-200"
+	style="color: var(--subtle); border-color: color-mix(in srgb, var(--highlight-med) 50%, transparent);"
+	aria-label="Customize theme"
+>
+	<Palette size={14} />
+	<span class="hidden sm:inline">theme</span>
+	<ChevronDown size={12} class="transition-transform duration-200 {open ? 'rotate-180' : ''}" />
+</button>
+
+{#if open}
+	<!-- Backdrop -->
+	<div
+		class="fixed inset-0 z-40"
+		role="button"
+		tabindex="-1"
+		onclick={() => {
+			open = false
+			activeKey = null
+		}}
+		onkeydown={() => {}}
+		aria-label="Close theme panel"
+	></div>
+
+	<!-- Panel -->
+	<div
+		class="fixed top-16 right-2 left-2 z-50 flex max-h-[80vh] flex-col overflow-hidden rounded-2xl sm:right-4 sm:left-auto sm:w-[320px]"
+		style="background: var(--overlay); border: 1px solid color-mix(in srgb, var(--subtle) 20%, transparent); box-shadow: 0 32px 64px -16px rgba(0,0,0,0.6);"
+	>
+		<!-- Header -->
+		<div
+			class="flex items-center justify-between px-4 py-3"
+			style="border-bottom: 1px solid color-mix(in srgb, var(--highlight-med) 30%, transparent)"
+		>
+			<span class="font-mono text-xs tracking-widest uppercase" style="color: var(--subtle)"
+				>Customize</span
+			>
+			<button
+				onclick={reset}
+				class="flex items-center gap-1 font-mono text-xs transition-colors"
+				style="color: var(--muted)"
+			>
+				<RotateCcw size={11} />
+				reset
+			</button>
+		</div>
+
+		<div class="flex flex-1 flex-col gap-5 overflow-y-auto p-4">
+			<!-- Presets -->
+			<div>
+				<p class="mb-2 font-mono text-[10px] tracking-widest uppercase" style="color: var(--muted)">
+					Presets
+				</p>
+				<div class="flex flex-wrap gap-1.5">
+					{#each Object.keys(PRESET_THEMES) as name}
+						<button
+							onclick={() => applyPreset(name)}
+							class="rounded-lg border px-2.5 py-1 font-mono text-[10px] transition-all duration-150"
+							style="
+                border-color: {activePreset === name
+								? 'color-mix(in srgb, var(--iris) 60%, transparent)'
+								: 'color-mix(in srgb, var(--highlight-med) 50%, transparent)'};
+                color: {activePreset === name ? 'var(--iris)' : 'var(--subtle)'};
+                background: {activePreset === name
+								? 'color-mix(in srgb, var(--iris) 10%, transparent)'
+								: 'transparent'};
+              "
+						>
+							{name}
+						</button>
+					{/each}
+
+					<!-- Import CSS -->
+					<label
+						class="flex cursor-pointer items-center gap-1 rounded-lg px-2.5 py-1 font-mono text-[10px] transition-all duration-150"
+						style="border: 1px dashed color-mix(in srgb, var(--highlight-med) 50%, transparent); color: var(--muted);"
+					>
+						+ import CSS
+						<input type="file" accept=".css" class="hidden" onchange={importCSS} />
+					</label>
+
+					<!-- Export CSS -->
+					<button
+						onclick={exportCSS}
+						class="flex cursor-pointer items-center gap-1 rounded-lg px-2.5 py-1 font-mono text-[10px] transition-all duration-150"
+						style="border: 1px dashed color-mix(in srgb, var(--highlight-med) 50%, transparent); color: var(--muted);"
+					>
+						↓ export CSS
+					</button>
+				</div>
+			</div>
+
+			<!-- Color tokens -->
+			<div>
+				<p class="mb-2 font-mono text-[10px] tracking-widest uppercase" style="color: var(--muted)">
+					Colors
+				</p>
+				<div class="grid grid-cols-1 gap-1">
+					{#each tokenKeys as key}
+						<div class="flex flex-col">
+							<div class="flex items-center justify-between gap-3 py-1">
+								<span class="font-mono text-xs" style="color: var(--subtle)">
+									{TOKEN_LABELS[key]}
+								</span>
+								<div class="flex shrink-0 items-center gap-2">
+									<!-- Hex input -->
+									<input
+										type="text"
+										value={tokens[key]}
+										onchange={(e) => {
+											const val = (e.target as HTMLInputElement).value.trim()
+											if (/^#[0-9a-fA-F]{6}$/.test(val)) update(key, val)
+										}}
+										class="w-20 rounded-lg px-2 py-1 text-right font-mono text-[10px] transition-all outline-none"
+										style="background: color-mix(in srgb, var(--overlay) 80%, transparent);
+                           border: 1px solid color-mix(in srgb, var(--highlight-med) 50%, transparent);
+                           color: var(--subtle);"
+										spellcheck="false"
+										maxlength="7"
+									/>
+									<!-- Swatch -->
+									<button
+										aria-label="Pick color for {TOKEN_LABELS[key]}"
+										onclick={() => (activeKey = activeKey === key ? null : key)}
+										class="h-7 w-7 shrink-0 rounded-lg transition-all"
+										style="background: {tokens[key]};
+                           border: 1px solid color-mix(in srgb, var(--highlight-high) 50%, transparent);
+                           box-shadow: {activeKey === key
+											? `0 0 0 2px var(--iris)`
+											: `0 0 0 2px color-mix(in srgb, ${tokens[key]} 30%, transparent)`};"
+									></button>
+								</div>
+							</div>
+
+							<!-- Inline color picker -->
+							{#if activeKey === key}
+								<div class="pt-1 pb-2">
+									<hex-color-picker
+										color={tokens[key]}
+										oncolor-changed={(e: Event) => onPickerChange(e, key)}
+										style="width: 100%; height: 160px;"
+									></hex-color-picker>
+								</div>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<style>
+	hex-color-picker {
+		--cp-border-radius: 10px;
+	}
+</style>
+</file>
+
+<file path="src/lib/shared/utils/theme.ts">
+export const TOKEN_LABELS: Record<string, string> = {
+	base: "Background",
+	surface: "Surface",
+	overlay: "Overlay",
+	muted: "Muted",
+	subtle: "Subtle",
+	text: "Text",
+	love: "Love",
+	gold: "Gold",
+	rose: "Rose",
+	pine: "Pine",
+	foam: "Foam",
+	iris: "Iris",
+	"highlight-low": "Highlight Low",
+	"highlight-med": "Highlight Med",
+	"highlight-high": "Highlight High",
+}
+
+export type ThemeTokens = Record<string, string>
+
+export const PRESET_THEMES: Record<string, ThemeTokens> = {
+	"Rosé Pine": {
+		base: "#191724",
+		surface: "#1f1d2e",
+		overlay: "#26233a",
+		muted: "#6e6a86",
+		subtle: "#908caa",
+		text: "#e0def4",
+		love: "#eb6f92",
+		gold: "#f6c177",
+		rose: "#ebbcba",
+		pine: "#31748f",
+		foam: "#9ccfd8",
+		iris: "#c4a7e7",
+		"highlight-low": "#21202e",
+		"highlight-med": "#403d52",
+		"highlight-high": "#524f67",
+	},
+	"Rosé Pine Moon": {
+		base: "#232136",
+		surface: "#2a273f",
+		overlay: "#393552",
+		muted: "#6e6a86",
+		subtle: "#908caa",
+		text: "#e0def4",
+		love: "#eb6f92",
+		gold: "#f6c177",
+		rose: "#ea9a97",
+		pine: "#3e8fb0",
+		foam: "#9ccfd8",
+		iris: "#c4a7e7",
+		"highlight-low": "#2a283e",
+		"highlight-med": "#44415a",
+		"highlight-high": "#56526e",
+	},
+	"Rosé Pine Dawn": {
+		base: "#faf4ed",
+		surface: "#fffaf3",
+		overlay: "#f2e9e1",
+		muted: "#9893a5",
+		subtle: "#797593",
+		text: "#575279",
+		love: "#b4637a",
+		gold: "#ea9d34",
+		rose: "#d7827a",
+		pine: "#286983",
+		foam: "#56949f",
+		iris: "#907aa9",
+		"highlight-low": "#f4ede8",
+		"highlight-med": "#dfdad9",
+		"highlight-high": "#cecacd",
+	},
+	"Catppuccin Mocha": {
+		base: "#1e1e2e",
+		surface: "#181825",
+		overlay: "#313244",
+		muted: "#6c7086",
+		subtle: "#a6adc8",
+		text: "#cdd6f4",
+		love: "#f38ba8",
+		gold: "#f9e2af",
+		rose: "#f5c2e7",
+		pine: "#89b4fa",
+		foam: "#89dceb",
+		iris: "#cba6f7",
+		"highlight-low": "#1e1e2e",
+		"highlight-med": "#313244",
+		"highlight-high": "#45475a",
+	},
+	"Catppuccin Latte": {
+		base: "#eff1f5",
+		surface: "#e6e9ef",
+		overlay: "#dce0e8",
+		muted: "#8c8fa1",
+		subtle: "#6c6f85",
+		text: "#4c4f69",
+		love: "#d20f39",
+		gold: "#df8e1d",
+		rose: "#ea76cb",
+		pine: "#1e66f5",
+		foam: "#04a5e5",
+		iris: "#8839ef",
+		"highlight-low": "#ccd0da",
+		"highlight-med": "#bcc0cc",
+		"highlight-high": "#acb0be",
+	},
+	"Tokyo Night": {
+		base: "#1a1b26",
+		surface: "#16161e",
+		overlay: "#2f3549",
+		muted: "#565f89",
+		subtle: "#737aa2",
+		text: "#c0caf5",
+		love: "#f7768e",
+		gold: "#e0af68",
+		rose: "#ff9e64",
+		pine: "#7aa2f7",
+		foam: "#7dcfff",
+		iris: "#bb9af7",
+		"highlight-low": "#1a1b26",
+		"highlight-med": "#2f3549",
+		"highlight-high": "#3b4261",
+	},
+	"Gruvbox Dark": {
+		base: "#282828",
+		surface: "#1d2021",
+		overlay: "#3c3836",
+		muted: "#928374",
+		subtle: "#a89984",
+		text: "#ebdbb2",
+		love: "#cc241d",
+		gold: "#d79921",
+		rose: "#b16286",
+		pine: "#458588",
+		foam: "#689d6a",
+		iris: "#d3869b",
+		"highlight-low": "#282828",
+		"highlight-med": "#3c3836",
+		"highlight-high": "#504945",
+	},
+	Nord: {
+		base: "#2e3440",
+		surface: "#3b4252",
+		overlay: "#434c5e",
+		muted: "#616e88",
+		subtle: "#8898b4",
+		text: "#eceff4",
+		love: "#bf616a",
+		gold: "#ebcb8b",
+		rose: "#b48ead",
+		pine: "#5e81ac",
+		foam: "#88c0d0",
+		iris: "#81a1c1",
+		"highlight-low": "#2e3440",
+		"highlight-med": "#434c5e",
+		"highlight-high": "#4c566a",
+	},
+}
+
+const STORAGE_KEY = "gitpeak-theme"
+const CUSTOM_TOKENS_KEY = "gitpeak-theme-tokens"
+
+function isBrowser() {
+	return typeof window !== "undefined"
+}
+
+export function applyPreset(name: string) {
+	if (!isBrowser()) return
+	const root = document.documentElement
+	root.setAttribute("data-theme", name)
+	for (const key of Object.keys(TOKEN_LABELS)) {
+		root.style.removeProperty(`--${key}`)
+	}
+	localStorage.setItem(STORAGE_KEY, name)
+	localStorage.removeItem(CUSTOM_TOKENS_KEY)
+}
+
+export function applyTokens(tokens: ThemeTokens) {
+	if (!isBrowser()) return
+	const root = document.documentElement
+	root.setAttribute("data-theme", "custom")
+	for (const [key, val] of Object.entries(tokens)) {
+		root.style.setProperty(`--${key}`, val)
+	}
+	localStorage.setItem(STORAGE_KEY, "custom")
+	localStorage.setItem(CUSTOM_TOKENS_KEY, JSON.stringify(tokens))
+}
+
+export function getTokens(): ThemeTokens {
+	if (!isBrowser()) return PRESET_THEMES["Rosé Pine"]
+	const name = localStorage.getItem(STORAGE_KEY)
+	if (name === "custom") {
+		const saved = localStorage.getItem(CUSTOM_TOKENS_KEY)
+		return saved ? JSON.parse(saved) : PRESET_THEMES["Rosé Pine"]
+	}
+	if (name && PRESET_THEMES[name]) return PRESET_THEMES[name]
+	return PRESET_THEMES["Rosé Pine"]
+}
+
+export function getSavedPresetName(): string | null {
+	if (!isBrowser()) return null
+	const name = localStorage.getItem(STORAGE_KEY)
+	if (!name || name === "custom") return null
+	return PRESET_THEMES[name] ? name : null
+}
+
+export function initTheme() {
+	if (!isBrowser()) return
+	const name = localStorage.getItem(STORAGE_KEY)
+	if (!name) {
+		applyPreset("Rosé Pine")
+		return
+	}
+	if (name === "custom") {
+		const saved = localStorage.getItem(CUSTOM_TOKENS_KEY)
+		if (saved) applyTokens(JSON.parse(saved))
+	} else if (PRESET_THEMES[name]) {
+		applyPreset(name)
+	}
+}
+
+export const COLORS = PRESET_THEMES["Rosé Pine"] as Record<string, string>
+export type ColorToken = keyof typeof COLORS
+
+const ACCENT_VARS = ["foam", "iris", "gold", "love", "rose", "pine"]
+export function pickAccentColor(index: number): string {
+	return `var(--${ACCENT_VARS[index % ACCENT_VARS.length]})`
+}
+
+export function parseThemeFromCSS(css: string): Partial<ThemeTokens> {
+	const result: Partial<ThemeTokens> = {}
+	const tokenKeys = Object.keys(TOKEN_LABELS)
+	const re = /--(?:color-)?([a-zA-Z0-9-]+)\s*:\s*([^;]+);/g
+	let match
+	while ((match = re.exec(css)) !== null) {
+		const key = match[1]
+		const val = match[2].trim()
+		if (tokenKeys.includes(key)) {
+			result[key] = val
+		}
+	}
+	return result
+}
+</file>
+
+<file path="src/lib/widgets/dashboard/DashboardWidget.svelte">
+<script lang="ts">
+	import ProfileCard from "$lib/entities/github/ui/ProfileCard.svelte"
+	import StatGrid from "$lib/entities/github/ui/StatGrid.svelte"
+	import LanguagePie from "$lib/entities/github/ui/LanguagePie.svelte"
+	import MostStarredRepo from "$lib/entities/github/ui/MostStarredRepo.svelte"
+	import { Download } from "lucide-svelte"
+	import type { GithubStats } from "$lib/entities/github/model/github-stats"
+
+	let {
+		stats,
+		username,
+		onExport,
+	}: {
+		stats: GithubStats
+		username: string
+		onExport: () => void
+	} = $props()
+</script>
+
+<div class="dashboard-container">
+	<div class="action-bar fade-in-up">
+		<button onclick={onExport} class="export-button" aria-label="Export wallpaper">
+			<Download size={13} />
+			<span>Wallpaper</span>
+		</button>
+	</div>
+
+	<div class="dashboard-grid">
+		<div class="dashboard-column fade-in-up">
+			<ProfileCard {stats} login={username} />
+			<StatGrid {stats} />
+		</div>
+
+		<div class="dashboard-column fade-in-up secondary-column">
+			{#if stats.languages?.length}
+				<LanguagePie 
+					languages={stats.languages} 
+					avatarUrl={stats.avatarUrl} 
+					involvedRepos={stats.involvedRepos} 
+				/>
+			{/if}
+
+			{#if stats.mostStarredRepo}
+				<MostStarredRepo repo={stats.mostStarredRepo} />
+			{/if}
+		</div>
+	</div>
+</div>
+
+<style>
+	.dashboard-container {
+		width: 100%;
+		max-width: 1100px;
+		margin: 0 auto;
+	}
+
+	.action-bar {
+		display: flex;
+		justify-content: flex-end;
+		width: 100%;
+		margin-bottom: 1rem;
+		animation-delay: 60ms;
+	}
+
+	.export-button {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: 0.75rem;
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		transition: all 0.2s;
+		border: 1px solid color-mix(in srgb, var(--highlight-med) 50%, transparent);
+		background: var(--glass-bg);
+		backdrop-filter: blur(8px);
+		color: var(--subtle);
+	}
+
+	.dashboard-grid {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 1rem;
+		touch-action: pan-y pinch-zoom;
+	}
+
+	.dashboard-column {
+		display: flex;
+		flex-direction: column;
+		gap: 0.875rem;
+		touch-action: pan-y;
+	}
+
+	.secondary-column {
+		animation-delay: 80ms;
+	}
+
+	@media (min-width: 860px) {
+		.dashboard-grid {
+			grid-template-columns: 1.05fr 1fr;
+			align-items: start;
+		}
+	}
+
+	@media (max-width: 640px) {
+		.dashboard-grid {
+			gap: 0.75rem;
+		}
+		.dashboard-column {
+			gap: 0.75rem;
+		}
+	}
+</style>
+</file>
+
+<file path="src/routes/og/+server.ts">
+import satori from "satori"
+import { html } from "satori-html"
+import { Resvg } from "@resvg/resvg-js"
+import { fetchGithubStats } from "$lib/entities/github/api/github"
+import { formatNumber } from "$lib/shared/utils/format"
+import { COLORS } from "$lib/shared/utils/theme"
+import type {
+	GitHubLanguage,
+	MostStarredRepo,
+	GithubStats,
+} from "$lib/entities/github/model/github-stats"
+
+async function loadFont(family: string, weight: number) {
+	const url = `https://fonts.googleapis.com/css2?family=${family.replace(/ /g, "+")}:wght@${weight}&display=swap`
+	const css = await fetch(url, {
+		headers: {
+			"User-Agent":
+				"Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_8; de-at) AppleWebKit/533.21.1 (KHTML, like Gecko) Version/5.0.5 Safari/533.21.1",
+		},
+	}).then((r) => r.text())
+
+	const match = css.match(/src: url\((.+?)\) format\('(opentype|truetype)'\)/)
+	if (!match) throw new Error(`Could not find TTF url for ${family}`)
+
+	return await fetch(match[1]).then((r) => r.arrayBuffer())
+}
+
+function polarToXY(cx: number, cy: number, r: number, deg: number) {
+	const rad = (deg * Math.PI) / 180
+	return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) }
+}
+
+function arcPath(cx: number, cy: number, ro: number, ri: number, s: number, e: number) {
+	const la = e - s > 180 ? 1 : 0
+	const o1 = polarToXY(cx, cy, ro, s),
+		o2 = polarToXY(cx, cy, ro, e)
+	const i1 = polarToXY(cx, cy, ri, e),
+		i2 = polarToXY(cx, cy, ri, s)
+	return `M ${o1.x} ${o1.y} A ${ro} ${ro} 0 ${la} 1 ${o2.x} ${o2.y} L ${i1.x} ${i1.y} A ${ri} ${ri} 0 ${la} 0 ${i2.x} ${i2.y} Z`
+}
+
+const accentVars = ["foam", "iris", "gold", "love", "rose", "pine"]
+
+export async function GET({ url }) {
+	const username = url.searchParams.get("username")
+	if (!username) return new Response("Missing username", { status: 400 })
+
+	const statsRes = await fetchGithubStats(username)
+	if (!statsRes.ok) return new Response("User not found", { status: 404 })
+	const stats = statsRes.data
+
+	const [monoReg, monoBold, serifReg, fallbackFont] = await Promise.all([
+		loadFont("JetBrains Mono", 400),
+		loadFont("JetBrains Mono", 700),
+		loadFont("Instrument Serif", 400),
+		loadFont("Noto Sans JP", 400),
+	])
+
+	let cursor = -90
+	const GAP_DEG = 2
+	const pieSlices = (stats.languages || []).map((l, i) => {
+		const span = (l.percentage / 100) * 360
+		const startDeg = cursor + GAP_DEG / 2
+		const endDeg = cursor + span - GAP_DEG / 2
+		cursor += span
+		return {
+			...l,
+			color: COLORS[accentVars[i % accentVars.length]],
+			startDeg,
+			endDeg,
+		}
+	})
+
+	const template = `
+		<div style="display: flex; flex-direction: row; width: 1200px; height: 630px; background-color: #191724; color: #e0def4; font-family: 'JetBrains Mono', 'Noto Sans JP', monospace; padding: 40px; box-sizing: border-box; justify-content: space-between;">
+			
+			<div style="display: flex; flex-direction: column; gap: 16px; width: 670px; height: 550px;">
+				
+				<div style="display: flex; align-items: center; gap: 24px; background-color: #1f1d2e; border: 1px solid #403d52; border-radius: 20px; padding: 24px; box-shadow: 0 16px 32px rgba(0,0,0,0.3);">
+					<img src="${stats.avatarUrl}" style="width: 100px; height: 100px; border-radius: 20px; border: 3px solid #c4a7e7;" />
+					<div style="display: flex; flex-direction: column; justify-content: center; width: 480px;">
+						<div style="display: flex; font-family: 'Instrument Serif', 'Noto Sans JP'; font-size: 52px; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #e0def4;">
+							${stats.displayName || username}
+						</div>
+						<div style="display: flex; font-size: 20px; color: #908caa; margin-top: 8px;">@${username}</div>
+					</div>
+				</div>
+
+				<div style="display: flex; flex-wrap: wrap; gap: 16px; width: 100%;">
+					<div style="display: flex; flex-direction: column; background-color: #1f1d2e; border: 1px solid #403d52; border-top: 4px solid #9ccfd8; border-radius: 16px; width: 327px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.2);">
+						<span style="font-size: 13px; color: #908caa; text-transform: uppercase; letter-spacing: 2px;">Contributions</span>
+						<span style="font-family: 'Instrument Serif'; font-size: 48px; color: #e0def4; margin-top: 4px;">${formatNumber(stats.totalContributions)}</span>
+					</div>
+					<div style="display: flex; flex-direction: column; background-color: #1f1d2e; border: 1px solid #403d52; border-top: 4px solid #c4a7e7; border-radius: 16px; width: 327px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.2);">
+						<span style="font-size: 13px; color: #908caa; text-transform: uppercase; letter-spacing: 2px;">Commits</span>
+						<span style="font-family: 'Instrument Serif'; font-size: 48px; color: #e0def4; margin-top: 4px;">${formatNumber(stats.totalCommits)}</span>
+					</div>
+					<div style="display: flex; flex-direction: column; background-color: #1f1d2e; border: 1px solid #403d52; border-top: 4px solid #f6c177; border-radius: 16px; width: 327px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.2);">
+						<span style="font-size: 13px; color: #908caa; text-transform: uppercase; letter-spacing: 2px;">Stars</span>
+						<span style="font-family: 'Instrument Serif'; font-size: 48px; color: #e0def4; margin-top: 4px;">${formatNumber(stats.totalStars)}</span>
+					</div>
+					<div style="display: flex; flex-direction: column; background-color: #1f1d2e; border: 1px solid #403d52; border-top: 4px solid #31748f; border-radius: 16px; width: 327px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.2);">
+						<span style="font-size: 13px; color: #908caa; text-transform: uppercase; letter-spacing: 2px;">Repositories</span>
+						<span style="font-family: 'Instrument Serif'; font-size: 48px; color: #e0def4; margin-top: 4px;">${formatNumber(stats.totalRepos)}</span>
+					</div>
+				</div>
+
+				${
+					stats.mostStarredRepo
+						? `
+					<div style="display: flex; justify-content: space-between; align-items: center; background-color: #1f1d2e; border: 1px solid #f6c17740; border-left: 6px solid #f6c177; border-radius: 16px; padding: 20px 24px; box-shadow: 0 16px 32px rgba(0,0,0,0.3);">
+						<div style="display: flex; flex-direction: column; width: 440px;">
+							<span style="font-size: 12px; color: #908caa; text-transform: uppercase; letter-spacing: 2px;">★ Top Repository</span>
+							<span style="display: flex; font-family: 'Instrument Serif', 'Noto Sans JP'; font-size: 34px; color: #e0def4; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${stats.mostStarredRepo.name}</span>
+						</div>
+						<div style="display: flex; font-size: 24px; color: #f6c177; font-weight: bold;">
+							★ ${formatNumber(stats.mostStarredRepo.stars)}
+						</div>
+					</div>
+				`
+						: ""
+				}
+
+			</div>
+
+			<div style="display: flex; flex-direction: column; align-items: center; width: 420px; height: 550px; background-color: #1f1d2e; border: 1px solid #c4a7e730; border-top: 4px solid #c4a7e7; border-radius: 20px; padding: 32px; box-shadow: 0 16px 32px rgba(0,0,0,0.4); box-sizing: border-box;">
+				
+				<div style="display: flex; justify-content: space-between; width: 100%; align-items: center; margin-bottom: 32px;">
+					<span style="font-size: 13px; color: #908caa; text-transform: uppercase; letter-spacing: 2px;">Languages</span>
+					<div style="display: flex; background-color: #c4a7e715; border: 1px solid #c4a7e740; border-radius: 12px; padding: 4px 12px; color: #c4a7e7; font-size: 12px;">
+						${stats.languages.length} used
+					</div>
+				</div>
+
+				<div style="display: flex; position: relative; width: 200px; height: 200px; align-items: center; justify-content: center;">
+					<svg width="200" height="200" viewBox="0 0 200 200" style="position: absolute; top: 0; left: 0;">
+						<circle cx="100" cy="100" r="75" fill="none" stroke="rgba(144,140,170,0.1)" stroke-width="38" />
+						${pieSlices
+							.map(
+								(s) => `
+							<path d="${arcPath(100, 100, 94, 56, s.startDeg, s.endDeg)}" fill="${s.color}" />
+						`,
+							)
+							.join("")}
+					</svg>
+					<img src="${stats.avatarUrl}" style="width: 90px; height: 90px; border-radius: 45px; border: 4px solid #1f1d2e;" />
+				</div>
+
+				<div style="display: flex; flex-direction: column; width: 100%; margin-top: 40px; gap: 16px;">
+					${pieSlices
+						.slice(0, 5)
+						.map(
+							(s) => `
+						<div style="display: flex; align-items: center; width: 100%; gap: 12px;">
+							<div style="display: flex; width: 12px; height: 12px; border-radius: 6px; background-color: ${s.color};"></div>
+							<span style="display: flex; font-size: 15px; font-weight: bold; color: #e0def4; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${s.name}</span>
+							<div style="display: flex; align-items: center; width: 100px;">
+								<div style="display: flex; width: 100%; height: 6px; background-color: #403d52; border-radius: 3px;">
+									<div style="display: flex; width: ${s.percentage}%; height: 100%; background-color: ${s.color}; border-radius: 3px;"></div>
+								</div>
+							</div>
+							<span style="display: flex; justify-content: flex-end; font-size: 14px; font-weight: bold; color: ${s.color}; width: 40px;">${s.percentage}%</span>
+						</div>
+					`,
+						)
+						.join("")}
+				</div>
+
+			</div>
+		</div>
+	`
+
+	const markup = html(template)
+	const svg = await satori(markup, {
+		width: 1200,
+		height: 630,
+		fonts: [
+			{ name: "JetBrains Mono", data: monoReg, weight: 400, style: "normal" },
+			{ name: "JetBrains Mono", data: monoBold, weight: 700, style: "normal" },
+			{ name: "Instrument Serif", data: serifReg, weight: 400, style: "normal" },
+			{ name: "Noto Sans JP", data: fallbackFont, weight: 400, style: "normal" },
+		],
+	})
+
+	const resvg = new Resvg(svg, { fitTo: { mode: "width", value: 1200 } })
+	const pngBuffer = resvg.render().asPng()
+
+	return new Response(new Uint8Array(pngBuffer), {
+		headers: {
+			"Content-Type": "image/png",
+			"Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
+		},
+	})
+}
+</file>
+
+<file path="src/app.d.ts">
+// See https://svelte.dev/docs/kit/types#app.d.ts
+// for information about these interfaces
+declare global {
+	namespace App {
+		// interface Error {}
+		// interface Locals {}
+		// interface PageData {}
+		// interface PageState {}
+		// interface Platform {}
+	}
+}
+
+export {}
+</file>
+
+<file path=".env.example">
+# GitPeak Environment Variables
+# Copy this file to .env and update the values
+
+# API endpoint for GitHub stats worker
+GITHUB_STATS_API_URL=https://portfolio-github-stats.carlosranara.workers.dev
+</file>
+
+<file path=".gitignore">
+node_modules/
+.svelte-kit/
+build/
+dist/
+.env
+.env.*
+!.env.example
+*.local
+.DS_Store
+Thumbs.db
+.vercel/
+</file>
+
+<file path="eslint.config.mjs">
+import prettier from "eslint-config-prettier"
+import path from "node:path"
+import { includeIgnoreFile } from "@eslint/compat"
+import js from "@eslint/js"
+import svelte from "eslint-plugin-svelte"
+import { defineConfig } from "eslint/config"
+import globals from "globals"
+import ts from "typescript-eslint"
+import stylistic from "@stylistic/eslint-plugin"
+import unicorn from "eslint-plugin-unicorn"
+import importPlugin from "eslint-plugin-import"
+import svelteConfig from "./svelte.config.js"
+
+const gitignorePath = path.resolve(import.meta.dirname, ".gitignore")
+
+export default defineConfig(
+  includeIgnoreFile(gitignorePath),
+  js.configs.recommended,
+  ts.configs.recommended,
+  svelte.configs.recommended,
+  prettier,
+  svelte.configs.prettier,
+  {
+    ignores: [
+      "dist/**",
+      "build/**",
+      "node_modules/**",
+      ".svelte-kit/**",
+      "*.config.js",
+      "*.config.mjs",
+      "src/lib/shared/ui/**", // Ignore standard shadcn UI files
+      "src/components/ui/**",
+    ],
+  },
+  {
+    files: ["**/*.svelte", "**/*.svelte.ts", "**/*.svelte.js", "**/*.ts", "**/*.js"],
+    plugins: {
+      "@stylistic": stylistic,
+      unicorn,
+      import: importPlugin,
+    },
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+      parserOptions: {
+        projectService: true,
+        extraFileExtensions: [".svelte"],
+        parser: ts.parser,
+        svelteConfig,
+      },
+    },
+    rules: {
+      "no-undef": "off",
+
+      /* --- 1. Formatting (auto-fixable — errors) --- */
+      "@stylistic/semi": ["error", "never"],
+      "@stylistic/quotes": ["error", "single"],
+
+      /* --- 2. Control Flow (auto-fixable — errors) --- */
+      "curly": ["error", "multi-or-nest", "consistent"],
+      "@stylistic/nonblock-statement-body-position": ["error", "below"],
+
+      /* --- 3. Line length (not auto-fixable — warn only) --- */
+      "@stylistic/max-len": ["warn", { code: 100, ignoreUrls: true }],
+
+      /* --- 4. Naming (not auto-fixable — warn only) --- */
+      "max-depth": ["error", 4],
+      "id-length": [
+        "warn",
+        {
+          min: 2,
+          exceptions: [
+            "_",
+            "a", "b", "c", "d", "e", "f", "g", "h",
+            "i", "j", "k", "m", "n", "o", "p", "r",
+            "s", "t", "v", "w", "x", "y",
+            "M", "T", "W", "H", "F", "S",
+          ],
+        },
+      ],
+
+      "unicorn/prevent-abbreviations": [
+        "warn",
+        {
+          checkFilenames: false,
+          replacements: {
+            props: false,
+            ref: false,
+            params: false,
+            args: false,
+            env: false,
+            ext: false,
+            dir: false,
+            res: false,
+            e: false,
+          },
+        },
+      ],
+
+      // Interface naming only — no types to avoid requiring project:true
+      "@typescript-eslint/naming-convention": [
+        "warn",
+        {
+          selector: "interface",
+          format: ["PascalCase"],
+          custom: { regex: "^I[A-Z]", match: false },
+        },
+      ],
+
+      /* --- 5. Safety (warn — fix manually over time) --- */
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { varsIgnorePattern: "^_", argsIgnorePattern: "^_" },
+      ],
+      "no-console": "warn",
+
+      /* --- 6. Architecture (errors — enforced going forward) --- */
+      "import/no-restricted-paths": [
+        "error",
+        {
+          zones: [
+            {
+              target: "./src",
+              from: "./src/**/helpers.ts",
+              message: "Standard 3.6: Do not use generic helper files.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  /* 
+    Enforce 2-space indentation on standard source files, 
+    leaving Svelte files to be validated by svelte-eslint / Prettier.
+  */
+  {
+    files: ["**/*.ts", "**/*.js", "**/*.svelte.ts", "**/*.svelte.js"],
+    rules: {
+      "@stylistic/indent": ["error", 2, { SwitchCase: 1 }],
+    },
+  },
+)
+</file>
+
+<file path="tailwind.config.ts">
+import type { Config } from "tailwindcss"
+
+export default {
+	content: ["./src/**/*.{html,js,svelte,ts}"],
+	theme: {
+		extend: {
+			colors: {
+				background: "var(--background)",
+				text: "var(--color-text)",
+				subtle: "var(--color-subtle)",
+				muted: "var(--color-muted)",
+				surface: "var(--color-surface)",
+				overlay: "var(--color-overlay)",
+				foam: "var(--color-foam)",
+				gold: "var(--color-gold)",
+				iris: "var(--color-iris)",
+				rose: "var(--color-rose)",
+				love: "var(--color-love)",
+				pine: "var(--color-pine)",
+			},
+		},
+	},
+	plugins: [],
+} satisfies Config
+</file>
+
+<file path="vercel.json">
+{
+	"headers": [
+		{
+			"source": "/(.*)",
+			"headers": [
+				{ "key": "X-Frame-Options", "value": "DENY" },
+				{ "key": "X-Content-Type-Options", "value": "nosniff" },
+				{ "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+				{ "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+				{ "key": "Permissions-Policy", "value": "geolocation=(), notifications=()" },
+				{
+					"key": "Strict-Transport-Security",
+					"value": "max-age=63072000; includeSubDomains; preload"
+				},
+				{
+					"key": "Content-Security-Policy",
+					"value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://avatars.githubusercontent.com https://cdn.simpleicons.org https://cdn.jsdelivr.net; connect-src 'self' https://ghfetch.carlosranara.workers.dev; frame-ancestors 'none';"
+				}
+			]
+		}
+	]
+}
+</file>
+
+<file path="vite.config.ts">
+import tailwindcss from "@tailwindcss/vite"
+import { sveltekit } from "@sveltejs/kit/vite"
+import { defineConfig } from "vite"
+
+export default defineConfig({ plugins: [tailwindcss(), sveltekit()] })
+</file>
+
+<file path=".prettierrc">
+{
+  "tabWidth": 2,
+  "printWidth": 100,
+  "semi": false,
+  "singleQuote": false,
+  "trailingComma": "all",
+  "plugins": ["prettier-plugin-svelte", "prettier-plugin-tailwindcss"],
+  "overrides": [
+    {
+      "files": "*.svelte",
+      "options": {
+        "parser": "svelte"
+      }
+    },
+    {
+      "files": ["*.ts", "*.tsx", "*.js", "*.jsx"],
+      "options": {
+        "parser": "typescript"
+      }
+    }
+  ]
+}
+</file>
+
+<file path="svelte.config.js">
+import adapter from "@sveltejs/adapter-auto"
+
+/** @type {import('@sveltejs/kit').Config} */
+const config = {
+	compilerOptions: {
+		runes: ({ filename }) => (filename.split(/[/\\]/).includes("node_modules") ? undefined : true),
+	},
+	kit: {
+		adapter: adapter(),
+		csp: {
+			mode: "auto",
+			directives: {
+				"default-src": ["self"],
+				"connect-src": [
+					"self",
+					"https://ghfetch.carlosranara.workers.dev",
+					"https://avatars.githubusercontent.com",
+					"https://fonts.googleapis.com",
+					"https://fonts.gstatic.com",
+				],
+				"img-src": ["self", "data:", "https://avatars.githubusercontent.com"],
+				"font-src": ["self", "https://fonts.gstatic.com"],
+				"style-src": ["self", "unsafe-inline", "https://fonts.googleapis.com"],
+				"script-src": ["self", "unsafe-inline"],
+				"worker-src": ["self", "blob:"],
+			},
+		},
+	},
+}
+
+export default config
+</file>
+
+<file path="src/lib/entities/github/ui/LanguagePie.svelte">
+<script lang="ts">
+  import { type GitHubLanguage, type InvolvedRepo } from '$lib/entities/github/model/github-stats'
+  import { useLanguagePie, arcPath, segOffset } from './useLanguagePie.svelte'
+  import { langIconUrl, hideImgOnError } from '$lib/shared/utils/icons'
+  import { Button } from '$lib/shared/ui/button'
+  import { Card, CardContent, CardHeader } from '$lib/shared/ui/card'
+  import { pickAccentColor } from '$lib/shared/utils/theme'
+  import * as Avatar from '$lib/shared/ui/avatar'
+  import { Orbit, Palette } from 'lucide-svelte'
+
+  let {
+    languages,
+    avatarUrl,
+    involvedRepos = [],
+  }: {
+    languages: GitHubLanguage[]
+    avatarUrl: string
+    involvedRepos?: InvolvedRepo[]
+  } = $props()
+
+  const activeRepos = $derived(involvedRepos.length > 0 ? involvedRepos : [])
+
+  let viewMode = $state<'languages' | 'orbit'>('languages')
+  let hoveredOrbitNode = $state<number | null>(null)
+  let isPfpHovered = $state(false)
+
+  const pie = useLanguagePie(() => languages)
+  const { SIZE, CX, CY, R_OUTER, R_INNER } = pie.dims
+
+  // Exact circular size calculation for the central Avatar button
+  const R_AVATAR_SIZE = $derived((R_INNER - 3.5) * 2)
+
+  // Perfectly centers the absolute HTML button over the SVG baseline coordinates
+  const leftOffset = $derived((SIZE - R_AVATAR_SIZE) / 2)
+
+  // Deterministic client-side color mapper
+  const getLanguageColor = (langName: string | null | undefined): string => {
+    if (!langName) 
+      return 'var(--iris)'
+
+    // 1. Match the color of the language's slice in the pie chart
+    const index = languages.findIndex((l) => l.name.toLowerCase() === langName.toLowerCase())
+    if (index !== -1) 
+      return pickAccentColor(index)
+
+    // 2. Generate a stable, deterministic color hash if it's not in the main languages list
+    let hash = 0
+    for (let index_ = 0; index_ < langName.length; index_++)
+      hash = langName.charCodeAt(index_) + ((hash << 5) - hash)
+
+    return pickAccentColor(Math.abs(hash))
+  }
+
+  // Chronological Distancing Logic
+  const mappedOrbitNodes = $derived.by(() => {
+    if (activeRepos.length === 0) 
+      return []
+
+    // Sort all repositories by chronological recency (newest first)
+    const parsed = activeRepos
+      .map((repo) => ({
+        ...repo,
+        timeValue: Date.parse(repo.lastContributedAt),
+      }))
+      .sort((a, b) => b.timeValue - a.timeValue)
+
+    const now = Date.now()
+    const dates = parsed.map((r) => r.timeValue)
+    const newest = Math.max(...dates)
+    const oldest = Math.min(...dates)
+    const span = newest - oldest || 1
+
+    const minRadius = R_INNER + 10
+    const maxRadius = R_OUTER + 12
+
+    // Dynamically scale core nodes based on dataset density
+    const count = parsed.length
+    const coreSize = Math.max(1.8, Math.min(3.5, 24 / count))
+    const haloSize = coreSize * 2
+
+    return parsed.map((repo, index) => {
+      const t = (repo.timeValue - oldest) / span
+      const radius = maxRadius - (maxRadius - minRadius) * t
+
+      // Even distribution over 360 degrees ensures overlaps are mathematically impossible
+      const angleDeg = index * (360 / count) - 90
+      const angleRad = (angleDeg * Math.PI) / 180
+
+      const x = CX + radius * Math.cos(angleRad)
+      const y = CY + radius * Math.sin(angleRad)
+
+      const ageDays = Math.max(0, Math.floor((now - repo.timeValue) / (1000 * 60 * 60 * 24)))
+
+      return {
+        ...repo,
+        x,
+        y,
+        radius,
+        relativeLabel: ageDays === 0 ? 'today' : ageDays === 1 ? 'yesterday' : `${ageDays}d ago`,
+        coreSize,
+        haloSize,
+        langColor: getLanguageColor(repo.primaryLanguage),
+      }
+    })
+  })
+
+  // Context-aware active colors
+  const currentActiveColor = $derived.by(() => {
+    if (viewMode === 'orbit' && hoveredOrbitNode !== null)
+      return mappedOrbitNodes[hoveredOrbitNode]?.langColor || 'rgba(196, 167, 231, 0.18)'
+
+    if (pie.hovered !== null) 
+      return pie.slices[pie.hovered]?.color || 'rgba(196, 167, 231, 0.18)'
+
+    return 'rgba(196, 167, 231, 0.18)'
+  })
+</script>
+
+<Card class="glass overflow-hidden rounded-2xl">
+  <CardHeader class="p-4 pb-0 sm:p-5">
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <span class="font-mono text-[10px] tracking-widest uppercase" style="color: var(--subtle)">
+          {viewMode === 'languages' ? 'Languages' : 'Recency Orbit'}
+        </span>
+      </div>
+
+      <div class="flex items-center gap-1 rounded-lg p-0.5" style="background: rgba(0,0,0,0.12)">
+        <Button
+          variant={viewMode === 'languages' ? 'secondary' : 'ghost'}
+          size="xs"
+          onclick={() => (viewMode = 'languages')}
+          class="h-6 cursor-pointer px-2.5 font-mono text-[9px] transition-colors duration-150"
+          style={viewMode === 'languages'
+            ? 'background: var(--highlight-med); color: var(--text);'
+            : 'color: var(--muted);'}
+        >
+          <Palette size={10} />
+          <span>Lang</span>
+        </Button>
+        <Button
+          variant={viewMode === 'orbit' ? 'secondary' : 'ghost'}
+          size="xs"
+          onclick={() => (viewMode = 'orbit')}
+          class="h-6 cursor-pointer px-2.5 font-mono text-[9px] transition-colors duration-150"
+          style={viewMode === 'orbit'
+            ? 'background: var(--highlight-med); color: var(--text);'
+            : 'color: var(--muted);'}
+        >
+          <Orbit size={10} />
+          <span>Orbit</span>
+        </Button>
+      </div>
+    </div>
+  </CardHeader>
+
+  <CardContent class="p-4 pt-4 sm:p-5">
+    <!-- Items-start keeps positions anchored independently of dynamic height shifts -->
+    <div
+      class="flex flex-col items-center justify-center gap-5 sm:flex-row sm:items-start sm:gap-5"
+    >
+      <div class="relative shrink-0" style="width:{SIZE}px; height:{SIZE}px;">
+        <!-- Background Vector Layer -->
+        <svg
+          width={SIZE}
+          height={SIZE}
+          viewBox="0 0 {SIZE} {SIZE}"
+          class="pointer-events-auto absolute inset-0 overflow-visible"
+        >
+          <defs>
+            {#each pie.slices as slice, index (slice.name || index)}
+              <filter id="lp-glow-{index}" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
+                <feFlood flood-color={slice.color} flood-opacity="0.5" result="clr" />
+                <feComposite in="clr" in2="blur" operator="in" result="glow" />
+                <feMerge>
+                  <feMergeNode in="glow" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            {/each}
+          </defs>
+
+          <!-- BASELINE RING -->
+          <circle
+            cx={CX}
+            cy={CY}
+            r={(R_OUTER + R_INNER) / 2}
+            fill="none"
+            stroke="rgba(144,140,170,0.05)"
+            stroke-width={R_OUTER - R_INNER + 1}
+          />
+
+          <!-- ================= VIEW 1: LANGUAGE PIE ================= -->
+          <g
+            class="lang-path-group"
+            style="
+							opacity: {viewMode === 'languages' ? '1' : '0'}; 
+							pointer-events: {viewMode === 'languages' ? 'auto' : 'none'};
+						"
+          >
+            {#each pie.animatedSlices as slice, index (slice.name || index)}
+              {@const off = pie.hovered === index ? segOffset(slice) : { x: 0, y: 0 }}
+              <path
+                d={arcPath(CX, CY, R_OUTER, R_INNER, slice.startDeg, slice.endDeg, off.x, off.y)}
+                fill={slice.color}
+                class="arc-path"
+                class:dimmed={pie.hovered !== null && pie.hovered !== index}
+                style="filter:{pie.hovered === index ? `url(#lp-glow-${index})` : 'none'};"
+                onmouseenter={() => pie.onEnter(index)}
+                onmouseleave={pie.onLeave}
+                ontouchstart={() => pie.onEnter(index)}
+                ontouchend={pie.onLeave}
+                role="presentation"
+              />
+            {/each}
+          </g>
+
+          <!-- ================= VIEW 2: RECENCY ORBIT ================= -->
+          <g
+            class="orbit-path-group"
+            style="
+							opacity: {viewMode === 'orbit' ? '1' : '0'}; 
+							pointer-events: {viewMode === 'orbit' ? 'auto' : 'none'};
+						"
+          >
+            <!-- Concentric Guides -->
+            <circle
+              cx={CX}
+              cy={CY}
+              r={R_INNER + 10}
+              fill="none"
+              stroke="var(--subtle)"
+              stroke-opacity="0.08"
+              stroke-dasharray="2 3"
+            />
+            <circle
+              cx={CX}
+              cy={CY}
+              r={(R_INNER + R_OUTER) / 2 + 5}
+              fill="none"
+              stroke="var(--subtle)"
+              stroke-opacity="0.06"
+              stroke-dasharray="2 3"
+            />
+            <circle
+              cx={CX}
+              cy={CY}
+              r={R_OUTER + 12}
+              fill="none"
+              stroke="var(--subtle)"
+              stroke-opacity="0.04"
+              stroke-dasharray="2 3"
+            />
+
+            <!-- Connecting Guides -->
+            {#each mappedOrbitNodes as node, index (node.owner + '/' + node.name)}
+              {@const isActive = hoveredOrbitNode === index}
+              {#if isActive}
+                <circle
+                  cx={CX}
+                  cy={CY}
+                  r={node.radius}
+                  fill="none"
+                  stroke={node.langColor}
+                  stroke-opacity="0.15"
+                  stroke-width="1"
+                  class="fade-in"
+                />
+                <line
+                  x1={CX}
+                  y1={CY}
+                  x2={node.x}
+                  y2={node.y}
+                  stroke={node.langColor}
+                  stroke-width="1"
+                  stroke-dasharray="2 2"
+                  stroke-opacity="0.25"
+                  class="fade-in"
+                />
+              {/if}
+            {/each}
+
+            <!-- Repository Nodes -->
+            {#each mappedOrbitNodes as node, index (node.owner + '/' + node.name)}
+              {@const isActive = hoveredOrbitNode === index}
+              <g
+                role="button"
+                class="cursor-pointer select-none"
+                onmouseenter={() => (hoveredOrbitNode = index)}
+                onmouseleave={() => (hoveredOrbitNode = null)}
+                onclick={() => window.open(node.url, '_blank')}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') 
+                    window.open(node.url, '_blank')
+                }}
+                tabindex="0"
+                aria-label="View {node.name} repository"
+              >
+                <circle
+                  cx={node.x}
+                  cy={node.y}
+                  r={isActive ? node.haloSize + 2 : node.haloSize}
+                  fill={node.langColor}
+                  fill-opacity={isActive ? 0.28 : 0.08}
+                  style="transition: r 0.2s cubic-bezier(0.25, 1, 0.5, 1), fill-opacity 0.2s ease;"
+                />
+                <circle
+                  cx={node.x}
+                  cy={node.y}
+                  r={isActive ? node.coreSize + 1 : node.coreSize}
+                  fill={node.langColor}
+                  style="transition: r 0.2s cubic-bezier(0.25, 1, 0.5, 1);"
+                />
+              </g>
+            {/each}
+          </g>
+
+          <!-- Subtle Context-Aware Outer Ring -->
+          <circle
+            cx={CX}
+            cy={CY}
+            r={R_INNER - 2}
+            fill="none"
+            stroke-width="1.5"
+            style="
+							stroke: {pie.hovered !== null || (viewMode === 'orbit' && hoveredOrbitNode !== null)
+							  ? currentActiveColor
+							  : 'rgba(196,167,231,0.18)'};
+							stroke-opacity: {isPfpHovered ? 0.5 : 0.2};
+							transition: stroke 0.2s ease, stroke-opacity 0.2s ease;
+						"
+          />
+        </svg>
+
+        <!-- ================= FOREGROUND NATIVE HTML OVERLAYS ================= -->
+        <!-- added "group" class to allow dynamic child hover selection -->
+        <button
+          type="button"
+          onclick={() => (viewMode = viewMode === 'languages' ? 'orbit' : 'languages')}
+          onmouseenter={() => (isPfpHovered = true)}
+          onmouseleave={() => (isPfpHovered = false)}
+          class="bg-base group pfp-button-group absolute flex cursor-pointer items-center justify-center overflow-hidden rounded-full border-none shadow-md outline-none select-none"
+          style="width: {R_AVATAR_SIZE}px; height: {R_AVATAR_SIZE}px; top: {leftOffset}px; left: {leftOffset}px;"
+          aria-label="Toggle view mode"
+        >
+          <!-- after:hidden strips default shadcn white inner-rings -->
+          <!-- transition handled cleanly via Tailwind group-hover modifiers -->
+          <Avatar.Root
+            class="absolute inset-0 h-full w-full transition-all duration-300 group-hover:brightness-[1.05] group-active:brightness-[0.95] after:hidden"
+            style="width: 100%; height: 100%;"
+          >
+            <Avatar.Image src={avatarUrl} alt="User avatar" />
+            <Avatar.Fallback
+              class="text-muted-foreground bg-muted flex items-center justify-center font-mono text-xs"
+              >GP</Avatar.Fallback
+            >
+          </Avatar.Root>
+
+          <!-- View 1: Language details inside Center -->
+          {#if viewMode === 'languages' && pie.hovered !== null && pie.slices[pie.hovered]}
+            {@const s = pie.slices[pie.hovered]}
+            <div
+              class="bg-base/85 fade-in pointer-events-none absolute inset-0.75 flex flex-col items-center justify-center rounded-full p-1.5 text-center"
+            >
+              <span
+                class="max-w-full truncate px-1 font-mono text-[9px] tracking-widest uppercase"
+                style="color: {s.color}">{s.name}</span
+              >
+              <span class="text-text mt-0.5 font-serif text-lg leading-none font-bold"
+                >{s.percentage}%</span
+              >
+            </div>
+          {/if}
+
+          <!-- View 2: Orbit details inside Center -->
+          {#if viewMode === 'orbit' && hoveredOrbitNode !== null && mappedOrbitNodes[hoveredOrbitNode]}
+            {@const node = mappedOrbitNodes[hoveredOrbitNode]}
+            <div
+              class="bg-base/90 fade-in pointer-events-none absolute inset-0.75 flex flex-col items-center justify-center rounded-full p-1.5 text-center"
+            >
+              <span
+                class="text-muted max-w-full truncate px-1 font-mono text-[8px] tracking-wider uppercase"
+                >@{node.owner}</span
+              >
+              <span
+                class="text-text mt-0.5 max-w-full truncate px-1 font-mono text-[10px] leading-tight font-semibold"
+                >{node.name}</span
+              >
+              <span class="mt-0.5 font-mono text-[9px] font-medium" style="color: {node.langColor}"
+                >{node.relativeLabel}</span
+              >
+            </div>
+          {/if}
+        </button>
+      </div>
+
+      <!-- ================= LEGEND CONTENT BLOCK ================= -->
+      <div class="flex w-full flex-col gap-3">
+        {#if viewMode === 'languages'}
+          <ul
+            class="legend-list flex w-full flex-col gap-0.5"
+            class:fade-in={viewMode === 'languages'}
+          >
+            {#each pie.slices as slice, index (slice.name || index)}
+              {@const url = langIconUrl(slice.name)}
+              {@const active = pie.hovered === index}
+              <li
+                class="lang-row"
+                class:active
+                style="background:{active
+                  ? `${slice.color}12`
+                  : 'transparent'}; animation-delay:{index * 30}ms;"
+                onmouseenter={() => pie.onEnter(index)}
+                onmouseleave={pie.onLeave}
+                ontouchstart={() => pie.onEnter(index)}
+                ontouchend={pie.onLeave}
+              >
+                <span
+                  class="icon-badge"
+                  style="
+										background:{slice.color}1a;
+										border:1px solid {slice.color}{active ? '48' : '20'};
+									"
+                >
+                  {#if url}
+                    <img
+                      src={url}
+                      alt={slice.name}
+                      width="13"
+                      height="13"
+                      onerror={hideImgOnError}
+                    />
+                    <span
+                      style="
+                      display:none;
+                      width:7px;
+                      height:7px;
+                      border-radius:50%;
+                      background:{slice.color};"
+                    ></span>
+                  {:else}
+                    <span style="width:7px;height:7px;border-radius:50%;background:{slice.color};"
+                    ></span>
+                  {/if}
+                </span>
+
+                <span
+                  class="flex-1 truncate"
+                  style="
+										font-family:'DM Mono',monospace;font-size:11px;
+										letter-spacing:0.01em;transition:color 0.15s ease;
+										color:{active ? slice.color : 'var(--text)'};
+										font-weight:{active ? 500 : 400};
+									">{slice.name}</span
+                >
+
+                <div
+                  class="shrink-0 overflow-hidden rounded-full"
+                  style="
+                  width:60px; 
+                  height:3px; 
+                  background:color-mix(in srgb, var(--subtle) 10%, transparent);"
+                >
+                  <div
+                    class="bar-grow h-full rounded-full"
+                    style="
+											width:{slice.percentage}%;
+											background:{slice.color};
+											opacity:{active ? 1 : 0.55};
+											animation-delay:{index * 20}ms;
+										"
+                  ></div>
+                </div>
+
+                <span
+                  class="shrink-0 text-right"
+                  style="
+										font-family:'DM Mono',monospace;font-size:10.5px;width:28px;
+										transition:color 0.15s ease;
+										color:{active ? slice.color : 'var(--muted)'};
+										font-weight:{active ? 600 : 400};
+									">{slice.percentage}%</span
+                >
+              </li>
+            {/each}
+          </ul>
+        {:else}
+          <div
+            class="legend-list flex w-full flex-col gap-0.5"
+            class:fade-in={viewMode === 'orbit'}
+          >
+            <div
+              class="px-2 pb-1.5 font-mono text-[9px] tracking-wider uppercase"
+              style="color: var(--muted)"
+            >
+              Recent Activity ({mappedOrbitNodes.length})
+            </div>
+            {#each mappedOrbitNodes as node, index (node.owner + '/' + node.name)}
+              {@const active = hoveredOrbitNode === index}
+              <button
+                type="button"
+                class="lang-row w-full cursor-pointer text-left"
+                class:active
+                style="
+									background:{active ? `${node.langColor}12` : 'transparent'}; 
+									animation-delay:{index * 30}ms;
+								"
+                onmouseenter={() => (hoveredOrbitNode = index)}
+                onmouseleave={() => (hoveredOrbitNode = null)}
+                onclick={() => window.open(node.url, '_blank')}
+              >
+                <span
+                  class="icon-badge"
+                  style="
+										background:{node.langColor}1a;
+										border:1px solid {node.langColor}{active ? '48' : '20'};
+									"
+                >
+                  <span style="width:7px;height:7px;border-radius:50%;background:{node.langColor};"
+                  ></span>
+                </span>
+
+                <div class="flex min-w-0 flex-1 flex-col">
+                  <span
+                    class="truncate"
+                    style="
+											font-family:'DM Mono',monospace;font-size:11px;
+											transition:color 0.15s ease;
+											color:{active ? node.langColor : 'var(--text)'};
+											font-weight: 500;
+										"
+                  >
+                    {node.name}
+                  </span>
+                  <span class="truncate text-[9px]" style="color: var(--muted)">
+                    {node.owner} &nbsp;·&nbsp; {node.primaryLanguage || 'Code'}
+                  </span>
+                </div>
+
+                <span
+                  class="shrink-0 text-right font-mono text-[10px] transition-colors duration-150"
+                  style="color: {active ? node.langColor : 'var(--subtle)'}"
+                >
+                  {node.relativeLabel}
+                </span>
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    </div>
+  </CardContent>
+</Card>
+
+<style>
+  /* Stable Fading View Transitions */
+  .lang-path-group,
+  .orbit-path-group {
+    transition: opacity 0.25s ease-in-out;
+    will-change: opacity;
+  }
+
+  .arc-path {
+    cursor: pointer;
+    transition:
+      opacity 0.18s ease,
+      filter 0.18s ease;
+    touch-action: manipulation;
+  }
+  .arc-path.dimmed {
+    opacity: 0.16;
+    filter: saturate(0.12);
+  }
+
+  .legend-list {
+    max-height: 236px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(144, 140, 170, 0.16) transparent;
+    touch-action: pan-y;
+  }
+  .legend-list::-webkit-scrollbar {
+    width: 3px;
+  }
+  .legend-list::-webkit-scrollbar-thumb {
+    background: rgba(144, 140, 170, 0.16);
+    border-radius: 99px;
+  }
+
+  @keyframes row-in {
+    from {
+      opacity: 0;
+      transform: translateX(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  /* Subtle legend row animations */
+  .lang-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border-radius: 8px;
+    cursor: default;
+    user-select: none;
+    transition:
+      background-color 0.2s ease,
+      transform 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+    touch-action: manipulation;
+    animation: row-in 0.3s ease backwards;
+    will-change: transform;
+  }
+  .lang-row:hover,
+  .lang-row.active {
+    transform: translateX(1.5px);
+  }
+
+  /* Floating Button Hover Animation */
+  .pfp-button-group {
+    transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+    will-change: transform;
+  }
+  .pfp-button-group:hover {
+    transform: translateY(-2.5px);
+  }
+  .pfp-button-group:active {
+    transform: translateY(1px);
+  }
+
+  /* Clean, non-bouncy badge translation */
+  .icon-badge {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition:
+      border-color 0.2s ease,
+      background-color 0.2s ease,
+      transform 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+    will-change: transform;
+  }
+  .lang-row:hover .icon-badge,
+  .lang-row.active .icon-badge {
+    transform: scale(1.04);
+  }
+
+  .icon-badge img {
+    width: 13px;
+    height: 13px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+  }
+  .lang-row:hover .icon-badge img,
+  .lang-row.active .icon-badge img {
+    filter: none;
+    opacity: 1;
+  }
+
+  .fade-in {
+    animation: row-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @media (max-width: 640px) {
+    .legend-list {
+      max-height: 180px;
+    }
+    .lang-row {
+      padding: 6px 8px;
+    }
+  }
+</style>
+</file>
+
+<file path="src/lib/features/exporter/WallpaperCanvas.svelte">
+<script lang="ts">
+	import type { GithubStats } from "$lib/entities/github/model/github-stats"
+	import { formatNumber, accountAge } from "$lib/shared/utils/format"
+	import { buildSlices } from "$lib/entities/github/ui/useLanguagePie.svelte"
+	import { Users, Calendar } from "lucide-svelte"
+	import DonutChart from "./DonutChart.svelte"
+
+	let {
+		stats,
+		login,
+		width,
+		height,
+		avatarSrc,
+	}: {
+		stats: GithubStats
+		login: string
+		width: number
+		height: number
+		avatarSrc?: string
+	} = $props()
+
+	const imgSrc = $derived(avatarSrc ?? stats.avatarUrl ?? "")
+	const displayName = $derived(stats.displayName || login)
+	const isLandscape = $derived(width >= height)
+	const u = $derived(width / 100)
+
+	const statItems = $derived([
+		{ label: "Contributions", value: stats.totalContributions, accent: "var(--foam)" },
+		{ label: "Commits", value: stats.totalCommits, accent: "var(--iris)" },
+		{ label: "Stars", value: stats.totalStars, accent: "var(--gold)" },
+		{ label: "Repos", value: stats.totalRepos, accent: "var(--pine)" },
+		{ label: "Followers", value: stats.followers, accent: "var(--rose)" },
+		{ label: "Pull Requests", value: stats.totalPrs, accent: "var(--love)" },
+	])
+
+	const langs = $derived(stats.languages ?? [])
+	const slices = $derived(buildSlices(langs))
+	const donutSize = $derived(isLandscape ? u * 18 : u * 26)
+	const donutRO = $derived(donutSize * 0.46)
+	const donutRI = $derived(donutSize * 0.29)
+</script>
+
+{#snippet statGrid(portrait = false)}
+	<div class="stat-grid" class:pt-stat-grid={portrait}>
+		{#each statItems as item}
+			<div
+				class="stat-card"
+				class:pt-stat-card={portrait}
+				style="
+          --accent:{item.accent}; 
+          border-top-width:calc(var(--u) * 0.35);
+        "
+			>
+				<span class="stat-label" class:pt-stat-label={portrait}>{item.label}</span>
+				<span class="stat-value" class:pt-stat-value={portrait} style="color:{item.accent};">
+					{formatNumber(item.value)}
+				</span>
+			</div>
+		{/each}
+	</div>
+{/snippet}
+
+{#snippet langLegend(portrait = false)}
+	<div class="lang-legend" class:ls-legend={!portrait} class:pt-legend={portrait}>
+		{#each slices as s}
+			<div class="lang-row">
+				<div
+					class="lang-dot"
+					class:pt-lang-dot={portrait}
+					style="
+            background:{s.color}; 
+            box-shadow:0 0 calc(var(--u)*{portrait ? 0.8 : 0.6}) {s.color};
+          "
+				></div>
+				<span class="lang-name" class:pt-lang-name={portrait}>{s.name}</span>
+				<span class="lang-pct" class:pt-lang-pct={portrait} style="color:{s.color};">
+					{s.percentage}%
+				</span>
+			</div>
+		{/each}
+	</div>
+{/snippet}
+
+<div class="canvas-root" style="width:{width}px; height:{height}px; --u:{u}px;">
+	<div class="aurora" aria-hidden="true"></div>
+
+	{#if isLandscape}
+		<div class="ls-grid">
+			<aside class="ls-profile">
+				<img class="avatar" src={imgSrc} crossorigin="anonymous" alt="" />
+
+				<div class="name-block">
+					<h2 class="display-name">{displayName}</h2>
+					<span class="handle">@{login}</span>
+				</div>
+
+				{#if stats.bio}
+					<p class="bio">{stats.bio}</p>
+				{/if}
+
+				<div class="divider"></div>
+
+				<div class="follow-row">
+					{#each [
+          { label: "Followers", value: stats.followers, icon: true }, 
+          { label: "Following", value: stats.following, icon: false }] as f}
+						<div class="follow-item">
+							<div class="follow-label">
+								{#if f.icon}<Users size={u * 1.1} />{/if}
+								<span>{f.label}</span>
+							</div>
+							<span class="follow-value">{formatNumber(f.value)}</span>
+						</div>
+					{/each}
+				</div>
+
+				<div class="account-age">
+					<Calendar size={u * 1.3} />
+					<span>{accountAge(stats.accountCreatedAt)} on GitHub</span>
+				</div>
+
+				<div style="flex:1"></div>
+
+				<div class="branding">
+					<span class="brand-name">GitPeak</span>
+					<span class="brand-url">github.com/{login}</span>
+				</div>
+			</aside>
+
+			<section class="ls-right">
+				{@render statGrid()}
+
+				{#if slices.length}
+					<div class="lang-panel">
+						<DonutChart size={donutSize} ro={donutRO} ri={donutRI} {slices} {u} />
+						{@render langLegend()}
+
+						{#if stats.mostStarredRepo}
+							{@const repo = stats.mostStarredRepo}
+							<div class="top-repo-aside">
+								<p class="eyebrow">Top Repo</p>
+								<h3 class="repo-name">{repo.name}</h3>
+								<span class="repo-stars">★ {formatNumber(repo.stars)}</span>
+							</div>
+						{/if}
+					</div>
+				{/if}
+			</section>
+		</div>
+	{:else}
+		<div class="pt-layout">
+			<div class="pt-logo">
+				<span class="brand-name">GitPeak</span>
+			</div>
+
+			<div class="pt-profile-card">
+				<img class="avatar pt-avatar" src={imgSrc} crossorigin="anonymous" alt="" />
+				<div style="min-width:0; overflow:hidden;">
+					<h2 class="pt-display-name">{displayName}</h2>
+					<p class="pt-handle">@{login}</p>
+					{#if stats.bio}
+						<p class="pt-bio">{stats.bio}</p>
+					{/if}
+					<p class="pt-follow-line">
+						<span class="pt-follow-num">{formatNumber(stats.followers)}</span> followers
+						&nbsp;·&nbsp;
+						<span class="pt-follow-num">{formatNumber(stats.following)}</span> following
+					</p>
+				</div>
+			</div>
+
+			{@render statGrid(true)}
+
+			{#if slices.length}
+				<div class="lang-panel pt-lang-panel">
+					<DonutChart size={donutSize} ro={donutRO} ri={donutRI} {slices} {u} variant="portrait" />
+					{@render langLegend(true)}
+				</div>
+			{/if}
+
+			{#if stats.mostStarredRepo}
+				{@const repo = stats.mostStarredRepo}
+				<div class="pt-top-repo">
+					<div style="min-width:0; overflow:hidden;">
+						<p class="eyebrow">Top Repository</p>
+						<h3 class="repo-name pt-repo-name">{repo.name}</h3>
+					</div>
+					<span class="pt-repo-stars">★ {formatNumber(repo.stars)}</span>
+				</div>
+			{/if}
+
+			<footer class="pt-footer">
+				<span class="brand-url">github.com/{login}</span>
+			</footer>
+		</div>
+	{/if}
+</div>
+
+<style>
+	.canvas-root {
+		position: relative;
+		overflow: hidden;
+		background: var(--base);
+		color: var(--text);
+		font-family: "DM Mono", "JetBrains Mono", monospace;
+		box-sizing: border-box;
+	}
+
+	.aurora {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background:
+			radial-gradient(
+				ellipse 85% 75% at -5% -10%,
+				color-mix(in srgb, var(--iris) 20%, transparent),
+				transparent 52%
+			),
+			radial-gradient(
+				ellipse 65% 55% at 108% 108%,
+				color-mix(in srgb, var(--foam) 16%, transparent),
+				transparent 52%
+			),
+			radial-gradient(
+				ellipse 50% 45% at 60% -5%,
+				color-mix(in srgb, var(--love) 8%, transparent),
+				transparent 62%
+			);
+	}
+
+	.ls-grid {
+		position: relative;
+		z-index: 1;
+		height: 100%;
+		display: grid;
+		grid-template-columns: calc(var(--u) * 30) 1fr;
+		padding: calc(var(--u) * 5);
+		box-sizing: border-box;
+	}
+
+	.ls-profile {
+		display: flex;
+		flex-direction: column;
+		gap: calc(var(--u) * 2.2);
+		justify-content: center;
+		padding-right: calc(var(--u) * 4.5);
+		border-right: 1px solid color-mix(in srgb, var(--iris) 15%, transparent);
+		overflow: hidden;
+	}
+
+	.ls-right {
+		padding-left: calc(var(--u) * 4.5);
+		display: flex;
+		flex-direction: column;
+		gap: calc(var(--u) * 2.2);
+		justify-content: center;
+	}
+
+	.avatar {
+		width: calc(var(--u) * 12);
+		height: calc(var(--u) * 12);
+		border-radius: calc(var(--u) * 2);
+		object-fit: cover;
+		border: calc(var(--u) * 0.15) solid color-mix(in srgb, var(--iris) 40%, transparent);
+		box-shadow: 0 calc(var(--u) * 1.5) calc(var(--u) * 5) rgba(0, 0, 0, 0.55);
+	}
+
+	.name-block {
+		display: flex;
+		flex-direction: column;
+		gap: calc(var(--u) * 0.6);
+	}
+
+	.display-name {
+		font-size: calc(var(--u) * 2.2);
+		font-family: "Instrument Serif", serif;
+		font-weight: 600;
+		line-height: 1.15;
+		margin: 0;
+		color: var(--text);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.handle {
+		font-size: calc(var(--u) * 1.15);
+		color: var(--subtle);
+		letter-spacing: 0.04em;
+	}
+
+	.bio {
+		font-size: calc(var(--u) * 1.05);
+		color: var(--subtle);
+		line-height: 1.65;
+		margin: 0;
+		display: -webkit-box;
+		-webkit-line-clamp: 4;
+		line-clamp: 4;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
+	.divider {
+		height: 1px;
+		background: linear-gradient(
+			90deg,
+			color-mix(in srgb, var(--iris) 30%, transparent),
+			transparent
+		);
+	}
+
+	.follow-row {
+		display: flex;
+		gap: calc(var(--u) * 3.5);
+	}
+
+	.follow-item {
+		display: flex;
+		flex-direction: column;
+		gap: calc(var(--u) * 0.4);
+	}
+
+	.follow-label {
+		display: flex;
+		align-items: center;
+		gap: calc(var(--u) * 0.5);
+		color: var(--subtle);
+		font-size: calc(var(--u) * 0.75);
+		text-transform: uppercase;
+		letter-spacing: 0.14em;
+	}
+
+	.follow-value {
+		font-size: calc(var(--u) * 2.2);
+		font-family: "Instrument Serif", serif;
+		font-weight: 700;
+		line-height: 1;
+		color: var(--text);
+	}
+
+	.account-age {
+		display: flex;
+		align-items: center;
+		gap: calc(var(--u) * 0.8);
+		color: var(--subtle);
+		font-size: calc(var(--u) * 1.15);
+	}
+
+	.branding {
+		display: flex;
+		align-items: center;
+		gap: calc(var(--u) * 1);
+	}
+
+	.brand-name {
+		font-size: calc(var(--u) * 1.7);
+		font-family: "Instrument Serif", serif;
+		background: linear-gradient(135deg, var(--iris) 0%, var(--foam) 50%, var(--rose) 100%);
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
+	}
+
+	.brand-url {
+		font-size: calc(var(--u) * 0.72);
+		color: var(--muted);
+	}
+
+	.stat-grid {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: calc(var(--u) * 1.5);
+	}
+
+	.stat-card {
+		background: color-mix(in srgb, var(--surface) 80%, transparent);
+		border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+		border-top-color: var(--accent);
+		border-radius: calc(var(--u) * 1.3);
+		padding: calc(var(--u) * 1.6) calc(var(--u) * 1.8);
+		display: flex;
+		flex-direction: column;
+		gap: calc(var(--u) * 0.6);
+		box-shadow:
+			0 calc(var(--u) * 0.5) calc(var(--u) * 2) rgba(0, 0, 0, 0.4),
+			0 0 calc(var(--u) * 4) color-mix(in srgb, var(--accent) 7%, transparent);
+	}
+
+	.stat-label {
+		font-size: calc(var(--u) * 0.68);
+		text-transform: uppercase;
+		letter-spacing: 0.16em;
+		color: var(--subtle);
+	}
+
+	.stat-value {
+		font-size: calc(var(--u) * 2.5);
+		font-family: "Instrument Serif", serif;
+		font-weight: 700;
+		line-height: 1;
+	}
+
+	.lang-panel {
+		background: color-mix(in srgb, var(--surface) 80%, transparent);
+		border: 1px solid color-mix(in srgb, var(--iris) 18%, transparent);
+		border-top: calc(var(--u) * 0.35) solid color-mix(in srgb, var(--iris) 60%, transparent);
+		border-radius: calc(var(--u) * 1.3);
+		padding: calc(var(--u) * 1.8) calc(var(--u) * 2);
+		box-shadow: 0 calc(var(--u) * 0.5) calc(var(--u) * 2.5) rgba(0, 0, 0, 0.4);
+		display: flex;
+		align-items: center;
+		gap: calc(var(--u) * 2.5);
+	}
+
+	.ls-legend {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: calc(var(--u) * 0.6);
+		min-width: 0;
+	}
+
+	.lang-row {
+		display: flex;
+		align-items: center;
+		gap: calc(var(--u) * 0.8);
+	}
+
+	.lang-dot {
+		width: calc(var(--u) * 0.6);
+		height: calc(var(--u) * 0.6);
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+
+	.lang-name {
+		font-size: calc(var(--u) * 0.75);
+		color: var(--text);
+		flex: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.lang-pct {
+		font-size: calc(var(--u) * 0.7);
+		flex-shrink: 0;
+		font-weight: 500;
+	}
+
+	.top-repo-aside {
+		flex-shrink: 0;
+		width: calc(var(--u) * 16);
+		border-left: 1px solid color-mix(in srgb, var(--subtle) 12%, transparent);
+		padding-left: calc(var(--u) * 2);
+		display: flex;
+		flex-direction: column;
+		gap: calc(var(--u) * 0.8);
+		justify-content: center;
+	}
+
+	.eyebrow {
+		font-size: calc(var(--u) * 0.68);
+		text-transform: uppercase;
+		letter-spacing: 0.15em;
+		color: var(--muted);
+		margin: 0;
+	}
+
+	.repo-name {
+		font-size: calc(var(--u) * 1.2);
+		font-family: "Instrument Serif", serif;
+		color: var(--text);
+		margin: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.repo-stars {
+		font-size: calc(var(--u) * 1.1);
+		color: var(--gold);
+	}
+
+	.pt-layout {
+		position: relative;
+		z-index: 1;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		padding: calc(var(--u) * 6);
+		gap: calc(var(--u) * 3);
+		box-sizing: border-box;
+		overflow: hidden;
+	}
+
+	.pt-logo {
+		text-align: center;
+		flex-shrink: 0;
+	}
+
+	.pt-logo .brand-name {
+		font-size: calc(var(--u) * 5);
+	}
+
+	.pt-profile-card {
+		display: flex;
+		align-items: center;
+		gap: calc(var(--u) * 4);
+		flex-shrink: 0;
+		background: color-mix(in srgb, var(--surface) 80%, transparent);
+		border: 1px solid color-mix(in srgb, var(--iris) 20%, transparent);
+		border-top: calc(var(--u) * 0.35) solid color-mix(in srgb, var(--iris) 60%, transparent);
+		border-radius: calc(var(--u) * 2.5);
+		padding: calc(var(--u) * 3.5) calc(var(--u) * 4);
+		box-shadow: 0 calc(var(--u) * 1) calc(var(--u) * 4) rgba(0, 0, 0, 0.4);
+	}
+
+	.pt-avatar {
+		flex-shrink: 0;
+		width: calc(var(--u) * 18);
+		height: calc(var(--u) * 18);
+		border-radius: calc(var(--u) * 2.5);
+		border-width: calc(var(--u) * 0.18);
+	}
+
+	.pt-display-name {
+		font-size: calc(var(--u) * 4.5);
+		font-family: "Instrument Serif", serif;
+		margin: 0 0 calc(var(--u) * 0.8);
+		line-height: 1.1;
+		color: var(--text);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.pt-handle {
+		font-size: calc(var(--u) * 1.5);
+		color: var(--subtle);
+		margin: 0 0 calc(var(--u) * 1.2);
+		letter-spacing: 0.05em;
+	}
+
+	.pt-bio {
+		font-size: calc(var(--u) * 1.3);
+		color: var(--muted);
+		margin: 0 0 calc(var(--u) * 1);
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
+	.pt-follow-line {
+		font-size: calc(var(--u) * 1.2);
+		color: var(--subtle);
+		margin: 0;
+	}
+
+	.pt-follow-num {
+		color: var(--text);
+	}
+
+	.pt-stat-grid {
+		gap: calc(var(--u) * 2.2);
+		flex-shrink: 0;
+	}
+
+	.pt-stat-card {
+		border-radius: calc(var(--u) * 2.2);
+		padding: calc(var(--u) * 2.8) calc(var(--u) * 2.5);
+		gap: calc(var(--u) * 1);
+	}
+
+	.pt-stat-label {
+		font-size: calc(var(--u) * 1.05);
+		letter-spacing: 0.14em;
+	}
+
+	.pt-stat-value {
+		font-size: calc(var(--u) * 4);
+	}
+
+	.pt-lang-panel {
+		border-radius: calc(var(--u) * 2.2);
+		padding: calc(var(--u) * 3) calc(var(--u) * 3.5);
+		gap: calc(var(--u) * 4);
+	}
+
+	.pt-legend {
+		flex: 1;
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: calc(var(--u) * 1.2) calc(var(--u) * 3);
+	}
+
+	.pt-lang-dot {
+		width: calc(var(--u) * 1.1);
+		height: calc(var(--u) * 1.1);
+	}
+
+	.pt-lang-name {
+		font-size: calc(var(--u) * 1.15);
+	}
+
+	.pt-lang-pct {
+		font-size: calc(var(--u) * 1.1);
+	}
+
+	.pt-top-repo {
+		background: color-mix(in srgb, var(--surface) 80%, transparent);
+		border: 1px solid color-mix(in srgb, var(--gold) 20%, transparent);
+		border-top: calc(var(--u) * 0.35) solid color-mix(in srgb, var(--gold) 60%, transparent);
+		border-radius: calc(var(--u) * 2.2);
+		padding: calc(var(--u) * 2.5) calc(var(--u) * 3);
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		flex-shrink: 0;
+		box-shadow: 0 calc(var(--u) * 0.5) calc(var(--u) * 2.5) rgba(0, 0, 0, 0.4);
+	}
+
+	.pt-repo-name {
+		font-size: calc(var(--u) * 2.8);
+	}
+
+	.pt-repo-stars {
+		font-size: calc(var(--u) * 2.2);
+		color: var(--gold);
+		flex-shrink: 0;
+		padding-left: calc(var(--u) * 2);
+		font-family: "Instrument Serif", serif;
+		font-weight: 700;
+	}
+
+	.pt-footer {
+		margin-top: auto;
+		text-align: center;
+		flex-shrink: 0;
+	}
+
+	.pt-footer .brand-url {
+		font-size: calc(var(--u) * 1.05);
+	}
+</style>
+</file>
+
+<file path="src/lib/features/search/SearchBar.svelte">
+<script lang="ts">
+	import { Search } from "lucide-svelte"
+	import { Input } from "$lib/shared/ui/input"
+	import { Button } from "$lib/shared/ui/button"
+
+	let { onSearch }: { onSearch: (username: string) => void } = $props()
+
+	let username = $state("")
+	let focused = $state(false)
+
+	function handleSearch() {
+		const trimmed = username.trim()
+		if (trimmed) onSearch(trimmed)
+	}
+
+	function handleKeydown(e: KeyboardEvent) {
+		if (e.key === "Enter") handleSearch()
+	}
+</script>
+
+<div
+	class="
+    glass relative flex w-full max-w-[calc(100vw-24px)]
+    max-w-lg touch-manipulation items-center
+    rounded-2xl p-1 transition-all
+    duration-300
+  "
+	class:focused
+>
+	<div class="flex shrink-0 items-center pr-1 pl-4">
+		<Search
+			size={15}
+			aria-hidden="true"
+			style="color: {focused ? 'var(--iris)' : 'var(--muted)'}; transition: color 0.2s;"
+		/>
+	</div>
+
+	<Input
+		bind:value={username}
+		onkeydown={handleKeydown}
+		onfocus={() => (focused = true)}
+		onblur={() => (focused = false)}
+		placeholder="username"
+		spellcheck="false"
+		autocomplete="off"
+		autocorrect="off"
+		autocapitalize="off"
+		enterkeyhint="search"
+		style="color: var(--text);"
+		class="
+      caret-iris flex-1 touch-manipulation border-none bg-transparent
+      px-2 py-3 font-mono text-base tracking-wide shadow-none
+      outline-none placeholder:opacity-30
+      focus-visible:ring-0 focus-visible:ring-offset-0
+      sm:text-base
+    "
+	/>
+
+	<Button
+		onclick={handleSearch}
+		variant="ghost"
+		style="color: var(--iris); border-color: color-mix(in srgb, var(--iris) 25%, transparent);
+           background: linear-gradient(to bottom right, color-mix(in srgb, var(--iris) 20%, transparent), color-mix(in srgb, var(--foam) 15%, transparent));"
+		class="
+      m-0.5 min-h-[44px] shrink-0 touch-manipulation rounded-xl
+      border px-5 py-2.5 font-mono text-base font-medium
+      tracking-wide uppercase transition-all
+      duration-200 select-none active:scale-95
+    "
+	>
+		peek
+	</Button>
+</div>
+
+<style>
+	.focused {
+		border-color: color-mix(in srgb, var(--subtle) 40%, transparent) !important;
+		box-shadow:
+			0 0 0 4px color-mix(in srgb, var(--iris) 8%, transparent),
+			0 24px 48px -12px rgba(0, 0, 0, 0.5);
+	}
+</style>
+</file>
+
+<file path="src/routes/api/readme/+server.ts">
+import { fetchGithubStats } from "$lib/entities/github/api/github"
+import { formatNumber } from "$lib/shared/utils/format"
+import { PRESET_THEMES } from "$lib/shared/utils/theme"
+import { arcPath } from "$lib/entities/github/ui/useLanguagePie.svelte"
+import type {
+	GithubStats,
+	GitHubLanguage,
+	MostStarredRepo,
+} from "$lib/entities/github/model/github-stats"
+
+interface DonutSlice extends GitHubLanguage {
+	color: string
+	startDeg: number
+	endDeg: number
+}
+type Theme = Record<string, string>
+type NameLayout = { fontSize: number; lines: string[] }
+
+const ACCENTS = ["foam", "iris", "gold", "love", "rose", "pine"] as const
+
+let cachedMono = ""
+let cachedSerif = ""
+
+async function fetchBase64(url: string | null | undefined): Promise<string> {
+	if (!url) return ""
+
+	try {
+		const res = await fetch(url, { signal: AbortSignal.timeout(3000) })
+
+		if (!res.ok) return ""
+
+		const buf = await res.arrayBuffer()
+		const base64 = Buffer.from(buf).toString("base64")
+
+		return base64
+	} catch {
+		return ""
+	}
+}
+
+async function loadFontB64(family: string, weight: number) {
+	const fam = family.replace(/ /g, "+")
+	const url = `https://fonts.googleapis.com/css2?family=${fam}:wght@${weight}&display=swap`
+	const ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_6_8)"
+
+	try {
+		const css = await fetch(url, { headers: { "User-Agent": ua } }).then((r) => r.text())
+		const match = css.match(/src: url\((.+?)\) format\('(opentype|truetype)'\)/)
+
+		return match ? fetchBase64(match[1]) : ""
+	} catch {
+		return ""
+	}
+}
+
+function buildDonutSlices(langs: GitHubLanguage[], theme: Theme): DonutSlice[] {
+	let cur = -90
+
+	return langs.map((lang, i) => {
+		const pct = Math.max(0, Math.min(100, lang.percentage ?? 0))
+		const span = (pct / 100) * 360
+		const startDeg = cur + 1.5
+		const endDeg = cur + span - 1.5
+
+		cur += span
+		const key = ACCENTS[i % ACCENTS.length]
+
+		return { ...lang, percentage: pct, color: theme[key], startDeg, endDeg }
+	})
+}
+
+function svgDefs(mono: string, serif: string, theme: Theme) {
+	return `
+    <defs>
+      <style>
+        @font-face { font-family: 'JetBrains Mono'; src: url(data:font/truetype;charset=utf-8;base64,${mono}) format('truetype'); }
+        @font-face { font-family: 'Instrument Serif'; src: url(data:font/truetype;charset=utf-8;base64,${serif}) format('truetype'); }
+        .text-main { font-family: 'JetBrains Mono', 'Noto Sans JP', monospace; fill: ${theme.text}; }
+        .text-serif { font-family: 'Instrument Serif', 'Noto Sans JP', serif; fill: ${theme.text}; }
+        .text-subtle { font-family: 'JetBrains Mono', monospace; fill: ${theme.subtle}; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes growX { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+        .stagger { opacity: 0; animation: fadeUp 0.6s ease-out forwards; }
+        .delay-1 { animation-delay: 0.1s; } .delay-2 { animation-delay: 0.2s; } .delay-3 { animation-delay: 0.3s; } .delay-4 { animation-delay: 0.4s; }
+        .slice { opacity: 0; animation: fadeIn 0.5s ease-out forwards; }
+        .bar-fill { transform-origin: left center; animation: growX 0.8s ease-out forwards; }
+      </style>
+      <radialGradient id="aurora-p" cx="20%" cy="0%" r="60%">
+        <stop offset="0%" stop-color="${theme.iris}" stop-opacity="0.15" />
+        <stop offset="100%" stop-color="${theme.base}" stop-opacity="0" />
+      </radialGradient>
+      <radialGradient id="aurora-b" cx="100%" cy="100%" r="60%">
+        <stop offset="0%" stop-color="${theme.foam}" stop-opacity="0.12" />
+        <stop offset="100%" stop-color="${theme.base}" stop-opacity="0" />
+      </radialGradient>
+      <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="12" result="blur" />
+        <feOffset in="blur" dx="0" dy="8" result="offsetBlur" />
+        <feFlood flood-color="#000" flood-opacity="0.35" result="color" />
+        <feComposite in="color" in2="offsetBlur" operator="in" result="shadow" />
+        <feMerge>
+          <feMergeNode in="shadow" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+      <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="3" result="blur" />
+        <feMerge>
+          <feMergeNode in="blur" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+      <clipPath id="do-clip"><circle cx="728" cy="170" r="48" /></clipPath>
+      <clipPath id="rp-clip"><rect x="40" y="420" width="464" height="72" rx="16" /></clipPath>
+    </defs>`
+}
+
+function getNameLayout(name: string): NameLayout {
+	const chars = [...name]
+	const len = chars.length
+
+	switch (true) {
+		case len <= 15:
+			return { fontSize: 46, lines: [name] }
+		case len <= 25:
+			return { fontSize: 36, lines: [name] }
+		case len <= 35:
+			return { fontSize: 28, lines: [name] }
+		default: {
+			const mid = Math.ceil(len / 2)
+			return {
+				fontSize: 22,
+				lines: [chars.slice(0, mid).join(""), chars.slice(mid).join("")],
+			}
+		}
+	}
+}
+
+function getNameY(
+	fontSize: number,
+	multiline: boolean,
+): { y1: number; y2: number; usernameY: number } {
+	if (multiline) return { y1: 70, y2: 70 + fontSize + 4, usernameY: 70 + fontSize + 4 + 24 }
+
+	const offsets: Record<number, [number, number]> = {
+		46: [75, 102],
+		36: [78, 104],
+		28: [76, 102],
+		22: [74, 100],
+	}
+	const [y1, usernameY] = offsets[fontSize]
+
+	return { y1, y2: 0, usernameY }
+}
+
+function svgProfile(stats: GithubStats, username: string, theme: Theme) {
+	const name = stats.displayName || username
+	const { fontSize, lines } = getNameLayout(name)
+	const { y1, y2, usernameY } = getNameY(fontSize, lines.length > 1)
+
+	return `
+    <g class="stagger delay-1">
+      ${lines[0] ? `<text x="40" y="${y1}" class="text-serif" font-size="${fontSize}">${lines[0]}</text>` : ""}
+      ${lines[1] ? `<text x="40" y="${y2}" class="text-serif" font-size="${fontSize}">${lines[1]}</text>` : ""}
+      <text x="40" y="${usernameY}" class="text-main" fill="${theme.subtle}" font-size="15">@${username}</text>
+    </g>`
+}
+
+function statCardSvg(
+	id: string,
+	x: number,
+	y: number,
+	accent: string,
+	label: string,
+	v: string,
+	theme: Theme,
+) {
+	return `
+    <clipPath id="${id}"><rect x="${x}" y="${y}" width="224" height="116" rx="16" /></clipPath>
+    <rect x="${x}" y="${y}" width="224" height="116" rx="16" fill="${theme.surface}" fill-opacity="0.6" stroke="${theme.subtle}" stroke-opacity="0.15" filter="url(#shadow)" />
+    <rect x="${x}" y="${y}" width="224" height="4" fill="${accent}" clip-path="url(#${id})" />
+    <text x="${x + 24}" y="${y + 40}" class="text-subtle">${label}</text>
+    <text x="${x + 24}" y="${y + 90}" class="text-serif" font-size="44">${v}</text>`
+}
+
+function svgStatGrid(stats: GithubStats, theme: Theme) {
+	return `
+    <g class="stagger delay-2">
+      ${statCardSvg("sc1", 40, 156, theme.foam, "Contributions", formatNumber(stats.totalContributions), theme)}
+      ${statCardSvg("sc2", 280, 156, theme.iris, "Commits", formatNumber(stats.totalCommits), theme)}
+      ${statCardSvg("sc3", 40, 288, theme.gold, "Stars", formatNumber(stats.totalStars), theme)}
+      ${statCardSvg("sc4", 280, 288, theme.pine, "Repositories", formatNumber(stats.totalRepos), theme)}
+    </g>`
+}
+
+function svgTopRepo(repo: MostStarredRepo | null, theme: Theme) {
+	if (!repo) return ""
+	return `
+    <g class="stagger delay-3">
+      <rect x="40" y="420" width="464" height="72" fill="${theme.surface}" fill-opacity="0.6" stroke="${theme.subtle}" stroke-opacity="0.15" rx="16" filter="url(#shadow)" />
+      <rect x="40" y="420" width="6" height="72" fill="${theme.gold}" clip-path="url(#rp-clip)" />
+      <text x="64" y="446" class="text-subtle">Top Repository</text>
+      <text x="64" y="476" class="text-serif" font-size="28" fill="${theme.text}">${repo.name}</text>
+      <text x="480" y="474" class="text-main" fill="${theme.gold}" font-weight="bold" font-size="20" text-anchor="end">★ ${formatNumber(repo.stars)}</text>
+    </g>`
+}
+
+function svgLangPanel(slices: DonutSlice[], total: number, avatar: string, theme: Theme) {
+	const paths = slices
+		.map(
+			(s, i) =>
+				`<path d="${arcPath(728, 170, 75, 57, s.startDeg, s.endDeg)}" fill="${s.color}" class="slice" style="animation-delay:${0.4 + i * 0.08}s"/>`,
+		)
+		.join("")
+	const bars = slices
+		.slice(0, 5)
+		.map(
+			(s, i) => `
+      <circle cx="572" cy="${296 + i * 30}" r="4" fill="${s.color}" />
+      <text x="588" y="${300 + i * 30}" class="text-main" font-size="12">${s.name}</text>
+      <rect x="700" y="${294 + i * 30}" width="140" height="4" fill="${theme.subtle}" fill-opacity="0.1" rx="2" />
+      <rect x="700" y="${294 + i * 30}" width="${(s.percentage / 100) * 140}" height="4" fill="${s.color}" rx="2" class="bar-fill" style="animation-delay:${0.6 + i * 0.1}s" filter="url(#glow)" />
+      <text x="890" y="${300 + i * 30}" class="text-main" font-size="12" font-weight="600" fill="${s.color}" text-anchor="end">${s.percentage}%</text>
+  `,
+		)
+		.join("")
+
+	return `
+    <g class="stagger delay-4">
+      <clipPath id="lang-clip"><rect x="536" y="40" width="384" height="452" rx="24" /></clipPath>
+      <rect x="536" y="40" width="384" height="452" rx="24" fill="${theme.surface}" fill-opacity="0.6" stroke="${theme.subtle}" stroke-opacity="0.15" filter="url(#shadow)" />
+      <rect x="536" y="40" width="384" height="4" fill="${theme.iris}" clip-path="url(#lang-clip)" />
+      <text x="568" y="82" class="text-subtle">Languages</text>
+      <rect x="830" y="65" width="60" height="20" rx="10" fill="${theme.iris}" fill-opacity="0.1" stroke="${theme.iris}" stroke-opacity="0.2" />
+      <text x="860" y="79" class="text-main" fill="${theme.iris}" font-size="10" text-anchor="middle">${total} used</text>
+      <circle cx="728" cy="170" r="66" fill="none" stroke="${theme.subtle}" stroke-opacity="0.05" stroke-width="18" />
+      ${paths}
+      ${avatar ? `<image href="data:image/png;base64,${avatar}" x="680" y="122" width="96" height="96" clip-path="url(#do-clip)" />` : ""}
+      <circle cx="728" cy="170" r="48" fill="none" stroke="${theme.surface}" stroke-width="3" />
+      ${bars}
+    </g>`
+}
+
+export async function GET({ url }: { url: URL }) {
+	const username = url.searchParams.get("username")?.trim()
+	if (!username) return new Response("Missing username", { status: 400 })
+
+	const requestedTheme = url.searchParams.get("theme") || "Rosé Pine"
+	const theme = PRESET_THEMES[requestedTheme] || PRESET_THEMES["Rosé Pine"]
+
+	const res = await fetchGithubStats(username)
+	if (!res.ok) return new Response("User not found", { status: 404 })
+
+	const stats = res.data
+	stats.languages = Array.isArray(stats.languages) ? stats.languages : []
+
+	if (!cachedMono || !cachedSerif) {
+		const [m, s] = await Promise.all([
+			loadFontB64("JetBrains Mono", 400),
+			loadFontB64("Instrument Serif", 400),
+		])
+		cachedMono = m
+		cachedSerif = s
+	}
+
+	const avatarB64 = await fetchBase64(stats.avatarUrl)
+	const slices = buildDonutSlices(stats.languages, theme)
+
+	const svg = `
+    <svg width="960" height="520" viewBox="0 0 960 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+      ${svgDefs(cachedMono, cachedSerif, theme)}
+      <rect width="960" height="520" fill="${theme.base}" rx="20" />
+      <rect width="960" height="520" fill="url(#aurora-p)" rx="20" />
+      <rect width="960" height="520" fill="url(#aurora-b)" rx="20" />
+      ${svgProfile(stats, username, theme)}
+      ${svgStatGrid(stats, theme)}
+      ${svgTopRepo(stats.mostStarredRepo, theme)}
+      ${svgLangPanel(slices, stats.languages.length, avatarB64, theme)}
+    </svg>`
+
+	return new Response(svg, {
+		headers: {
+			"Content-Type": "image/svg+xml",
+			"Cache-Control": "public, max-age=86400, stale-while-revalidate=86400",
+		},
+	})
+}
+</file>
+
+<file path="src/routes/+layout.svelte">
+<script lang="ts">
+	import "../app.css"
+	import { Toaster } from "svelte-sonner"
+	import { onMount } from "svelte"
+	import { initTheme } from "$lib/shared/utils/theme"
+
+	let { children } = $props()
+
+	onMount(() => initTheme())
+</script>
+
+<Toaster
+	position="bottom-right"
+	toastOptions={{
+		style:
+			"background: #26233a; border: 1px solid rgba(144,140,170,0.25); color: #e0def4; font-family: 'DM Mono', monospace; font-size: 13px; border-radius: 14px;",
+	}}
+/>
+
+{@render children()}
+</file>
+
+<file path="src/lib/features/exporter/WallpaperExporter.svelte">
+<script lang="ts">
+	import { toPng } from "html-to-image"
+	import { X, Download } from "lucide-svelte"
+	import type { GithubStats } from "$lib/entities/github/model/github-stats"
+	import WallpaperCanvas from "./WallpaperCanvas.svelte"
+	import { Button } from "$lib/shared/ui/button"
+	import { toast } from "svelte-sonner"
+
+	interface Format {
+		id: string
+		name: string
+		sub: string
+		w: number
+		h: number
+	}
+
+	let {
+		stats,
+		login,
+		onClose,
+	}: {
+		stats: GithubStats
+		login: string
+		onClose: () => void
+	} = $props()
+
+	const FORMATS: Format[] = [
+		{ id: "desktop", name: "Desktop", sub: "16:9", w: 1920, h: 1080 },
+		{ id: "mac", name: "MacBook", sub: "16:10", w: 2560, h: 1600 },
+		{ id: "phone", name: "Phone", sub: "9:16", w: 1080, h: 1920 },
+		{ id: "tall", name: "Tall", sub: "9:21", w: 1080, h: 2520 },
+	]
+
+	let selected = $state<Format>(FORMATS[0])
+	let generating = $state(false)
+	let exportNode = $state<HTMLElement | null>(null)
+	let isMobile = $state(false)
+	let avatarSrc = $state("")
+	let previewW = $state(700)
+	let previewH = $state(500)
+
+	const pad = $derived(isMobile ? 16 : 48)
+	const scale = $derived(Math.min((previewW - pad) / selected.w, (previewH - pad) / selected.h))
+
+	$effect(() => {
+		const url = stats.avatarUrl
+
+		if (!url) return
+
+		avatarSrc = url
+		fetch(url)
+			.then((r) => {
+				if (!r.ok) throw new Error(`${r.status}`)
+
+				return r.blob()
+			})
+			.then(
+				(blob) =>
+					new Promise<string>((res, rej) => {
+						const reader = new FileReader()
+						reader.onload = () => res(reader.result as string)
+						reader.onerror = () => rej(new Error("FileReader failed"))
+						reader.readAsDataURL(blob)
+					}),
+			)
+			.then((url) => {
+				avatarSrc = url
+			})
+			.catch(() => {
+				avatarSrc = url
+			})
+	})
+
+	$effect(() => {
+		const check = () => {
+			isMobile = window.innerWidth < 640
+		}
+		check()
+		window.addEventListener("resize", check)
+
+		return () => window.removeEventListener("resize", check)
+	})
+
+	async function generate(): Promise<void> {
+		if (!exportNode || generating) return
+
+		generating = true
+
+		try {
+			await new Promise<void>((r) => setTimeout(r, 150))
+			const dataUrl = await toPng(exportNode, {
+				pixelRatio: 2,
+				cacheBust: true,
+				width: selected.w,
+				height: selected.h,
+				style: {
+					backdropFilter: "none",
+					WebkitBackdropFilter: "none",
+				} as Partial<CSSStyleDeclaration>,
+				skipFonts: false,
+			})
+
+			const a = document.createElement("a")
+			a.href = dataUrl
+			a.download = `gitpeak-${login}-${selected.id}.png`
+
+			a.click()
+
+			toast.success("Wallpaper saved!")
+		} catch (err) {
+			console.error("Export failed:", err)
+			toast.error("Export failed. Check console for details.")
+		} finally {
+			generating = false
+		}
+	}
+</script>
+
+{#snippet formatList(fullWidth = false)}
+	{#each FORMATS as fmt}
+		<button
+			class="fmt-btn"
+			class:fmt-btn--full={fullWidth}
+			class:fmt-btn--active={selected.id === fmt.id}
+			onclick={() => (selected = fmt)}
+		>
+			<span>{fmt.name}</span>
+			<span class="fmt-sub">{fmt.sub}</span>
+		</button>
+	{/each}
+{/snippet}
+
+{#snippet previewFrame()}
+	<div
+		class="preview-frame"
+		style="
+      width:{selected.w * scale}px; 
+      height:{selected.h * scale}px;
+    "
+	>
+		<div
+			style="
+        transform:scale({scale}); transform-origin:top left;
+        width:{selected.w}px; 
+        height:{selected.h}px;"
+		>
+			<div
+				bind:this={exportNode}
+				style="
+        width:{selected.w}px; 
+        height:{selected.h}px;
+        "
+			>
+				<WallpaperCanvas {stats} {login} {avatarSrc} width={selected.w} height={selected.h} />
+			</div>
+		</div>
+	</div>
+{/snippet}
+
+{#snippet downloadBtn()}
+	<button class="dl-btn" class:dl-btn--busy={generating} onclick={generate} disabled={generating}>
+		{#if !generating}<Download size={12} />{/if}
+		{generating ? "Generating…" : "Download PNG"}
+	</button>
+{/snippet}
+
+<svelte:window onkeydown={(e) => e.key === "Escape" && onClose()} />
+
+<div
+	class="backdrop fixed inset-0 z-40"
+	role="button"
+	tabindex="-1"
+	aria-label="Close"
+	onclick={onClose}
+	onkeydown={() => {}}
+></div>
+
+<div class="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-6">
+	<div class="modal pointer-events-auto" class:modal--mobile={isMobile}>
+		{#if isMobile}
+			<header class="panel-bar border-bottom">
+				<span class="eyebrow">Wallpaper Export</span>
+				<Button variant="ghost" size="icon" class="h-7 w-7" onclick={onClose} aria-label="Close">
+					<X size={14} />
+				</Button>
+			</header>
+
+			<div class="fmt-strip border-bottom">
+				{@render formatList()}
+			</div>
+
+			<main class="preview-area" bind:clientWidth={previewW} bind:clientHeight={previewH}>
+				{@render previewFrame()}
+			</main>
+
+			<footer class="panel-bar border-top">
+				<span class="dim-label">{selected.w} × {selected.h}</span>
+				{@render downloadBtn()}
+			</footer>
+		{:else}
+			<aside class="sidebar">
+				<div class="mb-5 flex items-center justify-between">
+					<span class="eyebrow">Wallpaper Export</span>
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-6 w-6 rounded-lg"
+						onclick={onClose}
+						aria-label="Close"
+					>
+						<X size={13} />
+					</Button>
+				</div>
+
+				<p class="section-label">Format</p>
+				<div class="flex flex-1 flex-col gap-1">
+					{@render formatList(true)}
+				</div>
+
+				<div class="sidebar-footer border-top">
+					<span class="dim-label text-center">{selected.w} × {selected.h}</span>
+					{@render downloadBtn()}
+				</div>
+			</aside>
+
+			<main
+				class="flex min-w-0 flex-1 flex-col overflow-hidden"
+				bind:clientWidth={previewW}
+				bind:clientHeight={previewH}
+			>
+				<div class="preview-header border-bottom">
+					<span class="eyebrow">Live Preview</span>
+				</div>
+				<div class="preview-area">
+					{@render previewFrame()}
+				</div>
+			</main>
+		{/if}
+	</div>
+</div>
+
+<style>
+	.backdrop {
+		background: rgba(0, 0, 0, 0.72);
+		backdrop-filter: blur(6px);
+		-webkit-backdrop-filter: blur(6px);
+	}
+
+	.modal {
+		display: flex;
+		flex-direction: row;
+		width: min(1060px, 96vw);
+		max-height: 88vh;
+		border-radius: 20px;
+		overflow: hidden;
+		background: var(--overlay);
+		border: 1px solid color-mix(in srgb, var(--subtle) 18%, transparent);
+		box-shadow:
+			0 48px 96px -24px rgba(0, 0, 0, 0.75),
+			0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+	}
+
+	.modal--mobile {
+		flex-direction: column;
+		height: 92dvh;
+		max-height: 92dvh;
+	}
+
+	.border-bottom {
+		border-bottom: 1px solid color-mix(in srgb, var(--highlight-med) 35%, transparent);
+	}
+
+	.border-top {
+		border-top: 1px solid color-mix(in srgb, var(--highlight-med) 35%, transparent);
+	}
+
+	.panel-bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 10px 16px;
+		flex-shrink: 0;
+		background: color-mix(in srgb, var(--base) 40%, transparent);
+	}
+
+	.eyebrow {
+		font-size: 10px;
+		font-family: "DM Mono", monospace;
+		text-transform: uppercase;
+		letter-spacing: 0.18em;
+		color: var(--subtle);
+	}
+
+	.section-label {
+		font-size: 9px;
+		font-family: "DM Mono", monospace;
+		text-transform: uppercase;
+		letter-spacing: 0.18em;
+		color: var(--muted);
+		margin: 0 0 8px;
+	}
+
+	.dim-label {
+		font-size: 9px;
+		font-family: "DM Mono", monospace;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--muted);
+	}
+
+	.fmt-strip {
+		display: flex;
+		gap: 6px;
+		padding: 10px 12px;
+		overflow-x: auto;
+		flex-shrink: 0;
+		scrollbar-width: none;
+		background: color-mix(in srgb, var(--base) 40%, transparent);
+	}
+
+	.fmt-btn {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 6px;
+		padding: 7px 12px;
+		border-radius: 10px;
+		cursor: pointer;
+		font-family: "DM Mono", monospace;
+		font-size: 11px;
+		white-space: nowrap;
+		flex-shrink: 0;
+		transition: all 0.13s ease;
+		border: 1px solid color-mix(in srgb, var(--highlight-med) 50%, transparent);
+		background: transparent;
+		color: var(--subtle);
+	}
+
+	.fmt-btn--full {
+		width: 100%;
+		white-space: normal;
+		padding: 9px 12px;
+	}
+
+	.fmt-btn--active {
+		border-color: color-mix(in srgb, var(--iris) 50%, transparent);
+		background: color-mix(in srgb, var(--iris) 10%, transparent);
+		color: var(--iris);
+	}
+
+	.fmt-sub {
+		font-size: 9px;
+		color: var(--muted);
+		letter-spacing: 0.05em;
+	}
+
+	.fmt-btn--active .fmt-sub {
+		color: color-mix(in srgb, var(--iris) 65%, transparent);
+	}
+
+	.dl-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		width: 100%;
+		padding: 11px;
+		border-radius: 50px;
+		border: none;
+		cursor: pointer;
+		font-family: "DM Mono", monospace;
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		transition: all 0.15s ease;
+		background: color-mix(in srgb, var(--iris) 85%, transparent);
+		color: var(--base);
+	}
+
+	.dl-btn--busy {
+		background: color-mix(in srgb, var(--highlight-med) 60%, transparent);
+		color: var(--muted);
+		opacity: 0.7;
+		cursor: not-allowed;
+	}
+
+	.preview-area {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
+		padding: 24px;
+		min-height: 0;
+		background: repeating-linear-gradient(
+			45deg,
+			color-mix(in srgb, var(--highlight-low) 30%, transparent) 0px,
+			color-mix(in srgb, var(--highlight-low) 30%, transparent) 1px,
+			transparent 1px,
+			transparent 12px
+		);
+	}
+
+	.preview-frame {
+		position: relative;
+		overflow: hidden;
+		flex-shrink: 0;
+		border-radius: 6px;
+		box-shadow:
+			0 20px 60px -10px rgba(0, 0, 0, 0.6),
+			0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+	}
+
+	.sidebar {
+		width: 256px;
+		flex-shrink: 0;
+		display: flex;
+		flex-direction: column;
+		padding: 20px;
+		border-right: 1px solid color-mix(in srgb, var(--highlight-med) 40%, transparent);
+		background: color-mix(in srgb, var(--base) 40%, transparent);
+	}
+
+	.sidebar-footer {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		padding-top: 16px;
+	}
+
+	.preview-header {
+		padding: 12px 20px;
+		flex-shrink: 0;
+	}
+</style>
+</file>
+
+<file path="README.md">
+# GitPeak
+
+A web application for viewing public GitHub profile statistics. Enter any GitHub username and get
+an instant overview of their activity, languages, repositories, and contribution history.
+
+Live at [gitpeak.vercel.app](https://gitpeak.vercel.app)
+
+---
+
+## Features
+
+- Profile overview with avatar, bio, followers, and account age
+- Contribution and commit totals
+- Language distribution chart with per-language breakdown
+- Most starred repository highlight
+- Responsive layout for desktop and mobile
+- Dynamic, animated SVG exporter for GitHub READMEs with built-in theme support
+
+---
+
+## Add to your GitHub README
+
+You can embed your GitPeak dashboard directly into your GitHub profile `README.md`! It generates
+an animated, auto-updating SVG of your GitHub stats.
+
+Just copy and paste this code into your README, and replace `YOUR_USERNAME` with your actual
+GitHub username:
+
+```html
+<div align="center">
+	<a href="https://gitpeak.vercel.app/?username=YOUR_USERNAME">
+		<img src="https://gitpeak.vercel.app/api/readme?username=YOUR_USERNAME" alt="My GitHub Stats" />
+	</a>
+</div>
+```
+
+### Themes
+
+GitPeak supports 8 built-in themes. To change the look of your README card, simply add
+`&theme=Theme+Name` to the end of the image URL.
+
+For example, to use the **Catppuccin Mocha** theme:
+
+```html
+<img src="https://gitpeak.vercel.app/api/readme?username=YOUR_USERNAME&theme=Catppuccin+Mocha" />
+```
+
+**Available Themes:**
+
+- `Rosé+Pine` _(Default)_
+- `Rosé+Pine+Moon`
+- `Rosé+Pine+Dawn`
+- `Catppuccin+Mocha`
+- `Catppuccin+Latte`
+- `Tokyo+Night`
+- `Gruvbox+Dark`
+- `Nord`
+
+---
+
+## Tech Stack
+
+| Layer       | Technology                                      |
+| ----------- | ----------------------------------------------- |
+| Framework   | [SvelteKit](https://kit.svelte.dev/)            |
+| Components  | [shadcn-svelte](https://www.shadcn-svelte.com/) |
+| Headless UI | [bits-ui](https://www.bits-ui.com/)             |
+| Styling     | [Tailwind CSS](https://tailwindcss.com/)        |
+| Icons       | [Lucide](https://lucide.dev/)                   |
+| Backend     | Cloudflare Worker proxying GitHub's GraphQL API |
+
+---
+
+## Project Structure
+
+```text
+src/
+  lib/
+    components/ui/     # shadcn component primitives
+    features/
+      charts/          # LanguagePie component and hook
+      profile/         # ProfileCard component
+      repos/           # MostStarredRepo component
+      search/          # SearchBar, EmptyState, useSearch hook
+      skeleton/        # DashboardSkeleton loading state
+      stats/           # StatGrid component and hook
+    utils/             # api, config, format, icons, theme, tilt, types
+  routes/
+    +page.svelte       # main page
+    +layout.svelte     # app shell
+    api/readme/        # Animated SVG generator for GitHub READMEs
+    og/                # Static PNG Open Graph image generator
+```
+
+---
+
+## License
+
+MIT
+</file>
+
+<file path="src/app.css">
+@import "tailwindcss";
+
+@theme {
+	--color-base: #191724;
+	--color-surface: #1f1d2e;
+	--color-overlay: #26233a;
+	--color-muted: #6e6a86;
+	--color-subtle: #908caa;
+	--color-rp-text: #e0def4;
+	--color-love: #eb6f92;
+	--color-gold: #f6c177;
+	--color-rose-lang: #ebbcba;
+	--color-pine: #31748f;
+	--color-foam: #9ccfd8;
+	--color-iris: #c4a7e7;
+	--color-highlight-low: #21202e;
+	--color-highlight-med: #403d52;
+	--color-highlight-high: #524f67;
+
+	--font-family-mono: "DM Mono", "JetBrains Mono", monospace;
+	--font-family-serif: "Instrument Serif", serif;
+}
+
+:root {
+	--base: var(--color-base);
+	--surface: var(--color-surface);
+	--overlay: var(--color-overlay);
+	--muted: var(--color-muted);
+	--subtle: var(--color-subtle);
+	--text: var(--color-rp-text);
+	--love: var(--color-love);
+	--gold: var(--color-gold);
+	--rose: var(--color-rose-lang);
+	--pine: var(--color-pine);
+	--foam: var(--color-foam);
+	--iris: var(--color-iris);
+	--highlight-low: var(--color-highlight-low);
+	--highlight-med: var(--color-highlight-med);
+	--highlight-high: var(--color-highlight-high);
+}
+
+[data-theme="Rosé Pine"] {
+	--base: #191724;
+	--surface: #1f1d2e;
+	--overlay: #26233a;
+	--muted: #6e6a86;
+	--subtle: #908caa;
+	--text: #e0def4;
+	--love: #eb6f92;
+	--gold: #f6c177;
+	--rose: #ebbcba;
+	--pine: #31748f;
+	--foam: #9ccfd8;
+	--iris: #c4a7e7;
+	--highlight-low: #21202e;
+	--highlight-med: #403d52;
+	--highlight-high: #524f67;
+}
+
+[data-theme="Rosé Pine Moon"] {
+	--base: #232136;
+	--surface: #2a273f;
+	--overlay: #393552;
+	--muted: #6e6a86;
+	--subtle: #908caa;
+	--text: #e0def4;
+	--love: #eb6f92;
+	--gold: #f6c177;
+	--rose: #ea9a97;
+	--pine: #3e8fb0;
+	--foam: #9ccfd8;
+	--iris: #c4a7e7;
+	--highlight-low: #2a283e;
+	--highlight-med: #44415a;
+	--highlight-high: #56526e;
+}
+
+[data-theme="Rosé Pine Dawn"] {
+	--base: #faf4ed;
+	--surface: #fffaf3;
+	--overlay: #f2e9e1;
+	--muted: #9893a5;
+	--subtle: #797593;
+	--text: #575279;
+	--love: #b4637a;
+	--gold: #ea9d34;
+	--rose: #d7827a;
+	--pine: #286983;
+	--foam: #56949f;
+	--iris: #907aa9;
+	--highlight-low: #f4ede8;
+	--highlight-med: #dfdad9;
+	--highlight-high: #cecacd;
+}
+
+[data-theme="Catppuccin Mocha"] {
+	--base: #1e1e2e;
+	--surface: #181825;
+	--overlay: #313244;
+	--muted: #6c7086;
+	--subtle: #a6adc8;
+	--text: #cdd6f4;
+	--love: #f38ba8;
+	--gold: #f9e2af;
+	--rose: #f5c2e7;
+	--pine: #89b4fa;
+	--foam: #89dceb;
+	--iris: #cba6f7;
+	--highlight-low: #1e1e2e;
+	--highlight-med: #313244;
+	--highlight-high: #45475a;
+}
+
+[data-theme="Catppuccin Latte"] {
+	--base: #eff1f5;
+	--surface: #e6e9ef;
+	--overlay: #dce0e8;
+	--muted: #8c8fa1;
+	--subtle: #6c6f85;
+	--text: #4c4f69;
+	--love: #d20f39;
+	--gold: #df8e1d;
+	--rose: #ea76cb;
+	--pine: #1e66f5;
+	--foam: #04a5e5;
+	--iris: #8839ef;
+	--highlight-low: #ccd0da;
+	--highlight-med: #bcc0cc;
+	--highlight-high: #acb0be;
+}
+
+[data-theme="Tokyo Night"] {
+	--base: #1a1b26;
+	--surface: #16161e;
+	--overlay: #2f3549;
+	--muted: #565f89;
+	--subtle: #737aa2;
+	--text: #c0caf5;
+	--love: #f7768e;
+	--gold: #e0af68;
+	--rose: #ff9e64;
+	--pine: #7aa2f7;
+	--foam: #7dcfff;
+	--iris: #bb9af7;
+	--highlight-low: #1a1b26;
+	--highlight-med: #2f3549;
+	--highlight-high: #3b4261;
+}
+
+[data-theme="Gruvbox Dark"] {
+	--base: #282828;
+	--surface: #1d2021;
+	--overlay: #3c3836;
+	--muted: #928374;
+	--subtle: #a89984;
+	--text: #ebdbb2;
+	--love: #cc241d;
+	--gold: #d79921;
+	--rose: #b16286;
+	--pine: #458588;
+	--foam: #689d6a;
+	--iris: #d3869b;
+	--highlight-low: #282828;
+	--highlight-med: #3c3836;
+	--highlight-high: #504945;
+}
+
+[data-theme="Nord"] {
+	--base: #2e3440;
+	--surface: #3b4252;
+	--overlay: #434c5e;
+	--muted: #616e88;
+	--subtle: #8898b4;
+	--text: #eceff4;
+	--love: #bf616a;
+	--gold: #ebcb8b;
+	--rose: #b48ead;
+	--pine: #5e81ac;
+	--foam: #88c0d0;
+	--iris: #81a1c1;
+	--highlight-low: #2e3440;
+	--highlight-med: #434c5e;
+	--highlight-high: #4c566a;
+}
+
+* {
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+}
+
+body {
+	font-family: "JetBrains Mono", monospace;
+	background: var(--base);
+	color: var(--text);
+	overflow-x: hidden;
+	padding-left: env(safe-area-inset-left);
+	padding-right: env(safe-area-inset-right);
+	padding-top: env(safe-area-inset-top);
+	padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ── Aurora background ───────────────────────────────────────────────────── */
+.aurora-bg {
+	position: fixed;
+	inset: 0;
+	z-index: -1;
+	background: var(--base);
+	overflow: hidden;
+}
+
+.aurora-bg::before,
+.aurora-bg::after {
+	content: "";
+	position: absolute;
+	border-radius: 50%;
+	filter: blur(120px);
+	animation: drift 25s ease-in-out infinite;
+}
+
+.aurora-bg::before {
+	width: 70vw;
+	height: 70vw;
+	top: -20%;
+	left: -10%;
+	background: radial-gradient(
+		circle,
+		color-mix(in srgb, var(--iris) 12%, transparent) 0%,
+		transparent 70%
+	);
+	animation-duration: 20s;
+}
+
+.aurora-bg::after {
+	width: 60vw;
+	height: 60vw;
+	bottom: -15%;
+	right: -10%;
+	background: radial-gradient(
+		circle,
+		color-mix(in srgb, var(--foam) 10%, transparent) 0%,
+		transparent 70%
+	);
+	animation-duration: 28s;
+	animation-direction: reverse;
+}
+
+@keyframes drift {
+	0%,
+	100% {
+		transform: translate(0, 0) scale(1);
+	}
+	33% {
+		transform: translate(40px, -60px) scale(1.08);
+	}
+	66% {
+		transform: translate(-30px, 40px) scale(0.95);
+	}
+}
+
+/* ── Glass card ──────────────────────────────────────────────────────────── */
+.glass {
+	background: color-mix(in srgb, var(--surface) 60%, transparent);
+	backdrop-filter: blur(20px) saturate(160%);
+	-webkit-backdrop-filter: blur(20px) saturate(160%);
+	border: 1px solid color-mix(in srgb, var(--subtle) 15%, transparent);
+	box-shadow:
+		0 1px 0 0 color-mix(in srgb, var(--text) 6%, transparent) inset,
+		0 32px 64px -16px rgba(0, 0, 0, 0.45);
+}
+
+/* ── Gradient text ───────────────────────────────────────────────────────── */
+.gradient-text {
+	color: var(--iris);
+	background: linear-gradient(135deg, var(--iris) 0%, var(--foam) 50%, var(--rose) 100%);
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+}
+
+/* ── Tilt card ───────────────────────────────────────────────────────────── */
+.tilt-card {
+	will-change: transform;
+	transition:
+		transform 0.1s ease,
+		box-shadow 0.1s ease,
+		border-color 0.1s ease;
+	touch-action: manipulation;
+}
+
+.tilt-shine {
+	pointer-events: none;
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+}
+
+/* ── Animations ──────────────────────────────────────────────────────────── */
+@keyframes fadeInUp {
+	from {
+		opacity: 0;
+		transform: translateY(16px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.fade-in-up {
+	animation: fadeInUp 0.5s ease both;
+}
+
+@keyframes shimmer {
+	0% {
+		transform: translateX(-100%);
+	}
+	100% {
+		transform: translateX(400%);
+	}
+}
+
+.shimmer {
+	position: relative;
+	overflow: hidden;
+	isolation: isolate;
+}
+
+.shimmer::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	width: 25%;
+	background: linear-gradient(
+		90deg,
+		transparent 0%,
+		color-mix(in srgb, var(--iris) 11%, transparent) 40%,
+		color-mix(in srgb, var(--text) 15%, transparent) 50%,
+		color-mix(in srgb, var(--iris) 11%, transparent) 60%,
+		transparent 100%
+	);
+	animation: shimmer 2s ease-in-out infinite;
+	pointer-events: none;
+}
+
+@keyframes barGrow {
+	from {
+		clip-path: inset(0 100% 0 0);
+	}
+	to {
+		clip-path: inset(0 0% 0 0);
+	}
+}
+
+.bar-grow {
+	animation: barGrow 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes pulseDot {
+	0%,
+	100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	50% {
+		opacity: 0.4;
+		transform: scale(0.8);
+	}
+}
+
+.pulse-dot {
+	animation: pulseDot 1.4s ease-in-out infinite;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+	width: 6px;
+}
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+::-webkit-scrollbar-thumb {
+	background: var(--highlight-med);
+	border-radius: 99px;
+}
+</file>
+
+<file path="package.json">
+{
+	"name": "gitpeak",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"lint": "prettier --check . && eslint .",
+		"format": "prettier --write ."
+	},
+	"devDependencies": {
+		"@eslint/compat": "^2.0.3",
+		"@eslint/js": "^10.0.1",
+		"@fontsource-variable/inter": "^5.2.8",
+		"@internationalized/date": "^3.12.0",
+		"@lucide/svelte": "^1.7.0",
+		"@stylistic/eslint-plugin": "^5.10.0",
+		"@sveltejs/adapter-auto": "^7.0.0",
+		"@sveltejs/kit": "^2.50.2",
+		"@sveltejs/vite-plugin-svelte": "^6.2.4",
+		"@tailwindcss/vite": "^4.1.18",
+		"@types/node": "^24",
+		"@typescript-eslint/eslint-plugin": "^8.60.0",
+		"@typescript-eslint/parser": "^8.60.0",
+		"bits-ui": "^2.16.3",
+		"clsx": "^2.1.1",
+		"eslint": "^10.4.1",
+		"eslint-config-prettier": "^10.1.8",
+		"eslint-plugin-import": "^2.32.0",
+		"eslint-plugin-svelte": "^3.15.2",
+		"eslint-plugin-unicorn": "^64.0.0",
+		"globals": "^17.4.0",
+		"mode-watcher": "^1.1.0",
+		"prettier": "^3.8.1",
+		"prettier-plugin-svelte": "^3.4.1",
+		"prettier-plugin-tailwindcss": "^0.7.2",
+		"shadcn-svelte": "^1.2.7",
+		"svelte": "^5.54.0",
+		"svelte-check": "^4.4.2",
+		"svelte-sonner": "^1.1.0",
+		"tailwind-merge": "^3.5.0",
+		"tailwind-variants": "^3.2.2",
+		"tailwindcss": "^4.1.18",
+		"tw-animate-css": "^1.4.0",
+		"typescript": "^5.9.3",
+		"typescript-eslint": "^8.60.0",
+		"vite": "^7.3.1"
+	},
+	"dependencies": {
+		"@resvg/resvg-js": "^2.6.2",
+		"chart.js": "^4.5.1",
+		"html-to-image": "^1.11.13",
+		"lucide-svelte": "^1.0.1",
+		"satori": "^0.26.0",
+		"satori-html": "^0.3.2",
+		"vanilla-colorful": "^0.7.2",
+		"zod": "^4.4.3"
+	}
+}
+</file>
+
+<file path="src/routes/+page.svelte">
+<script lang="ts">
+	import { page } from "$app/stores"
+	import { goto } from "$app/navigation"
+	import { useSearch } from "$lib/features/search/useSearch.svelte"
+	import SearchBar from "$lib/features/search/SearchBar.svelte"
+	import EmptyState from "$lib/features/search/EmptyState.svelte"
+	import DashboardWidget from "$lib/widgets/dashboard/DashboardWidget.svelte"
+	import DashboardSkeleton from "$lib/shared/ui/skeleton/DashboardSkeleton.svelte"
+	import ThemeCustomizer from "$lib/features/theme/ThemeCustomizer.svelte"
+	import WallpaperExporter from "$lib/features/exporter/WallpaperExporter.svelte"
+
+	const search = useSearch()
+	let showExporter = $state(false)
+	let urlUsername = $derived($page.url.searchParams.get("username"))
+
+	$effect(() => {
+		const shouldTriggerSearch =
+			urlUsername && urlUsername !== search.currentUsername && !search.loading
+		if (shouldTriggerSearch) {
+			search.onSearch(urlUsername)
+		}
+	})
+
+	function handleSearchSubmit(username: string) {
+		const searchParams = new URLSearchParams()
+		searchParams.set("username", username)
+		goto(`/?${searchParams.toString()}`, { keepFocus: true, noScroll: true })
+		search.onSearch(username)
+	}
+</script>
+
+<svelte:head>
+	{#if urlUsername}
+		<title>{urlUsername}'s GitHub Stats | GitPeak</title>
+		<meta property="og:title" content="{urlUsername}'s GitHub Stats | GitPeak" />
+		<meta
+			property="og:description"
+			content="Peek at {urlUsername}'s GitHub profile stats, languages, and top repositories."
+		/>
+		<meta property="og:image" content="{$page.url.origin}/og?username={urlUsername}&v=1" />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content="{urlUsername}'s GitHub Stats | GitPeak" />
+		<meta name="twitter:image" content="{$page.url.origin}/og?username={urlUsername}&v=1" />
+	{:else}
+		<title>GitPeak — Peek at any GitHub profile, beautifully</title>
+		<meta property="og:title" content="GitPeak — Peek at any GitHub profile, beautifully" />
+		<meta property="og:image" content="{$page.url.origin}/favicon.svg" />
+	{/if}
+</svelte:head>
+
+<div class="aurora-bg" aria-hidden="true"></div>
+
+<div class="fixed top-4 right-4 z-50">
+	<ThemeCustomizer />
+</div>
+
+<main class="main-layout">
+	<header class="page-header">
+		<span class="eyebrow" aria-label="GitHub Stats"> github stats </span>
+		<h1 class="page-title">
+			<span class="gradient-text">GitPeak</span>
+		</h1>
+		<p class="tagline">peek at any github profile beautifully</p>
+	</header>
+
+	<div class="search-section">
+		<SearchBar onSearch={handleSearchSubmit} />
+	</div>
+
+	{#if search.loading}
+		<DashboardSkeleton />
+	{/if}
+
+	{#if search.stats}
+		<DashboardWidget
+			stats={search.stats}
+			username={search.currentUsername}
+			onExport={() => (showExporter = true)}
+		/>
+	{/if}
+
+	{#if search.noResults}
+		<EmptyState username={search.currentUsername} />
+	{/if}
+</main>
+
+{#if showExporter && search.stats}
+	<WallpaperExporter
+		stats={search.stats}
+		login={search.currentUsername}
+		onClose={() => (showExporter = false)}
+	/>
+{/if}
+
+<style>
+	.main-layout {
+		display: flex;
+		min-height: 100vh;
+		width: 100%;
+		max-width: 100vw;
+		flex-direction: column;
+		align-items: center;
+		gap: 2rem;
+		overflow-x: hidden;
+		padding: 2.5rem 1rem;
+	}
+
+	@media (min-width: 640px) {
+		.main-layout {
+			padding: 4rem 1.5rem;
+			gap: 2.5rem;
+		}
+	}
+
+	@media (min-width: 768px) {
+		.main-layout {
+			padding: 5rem 1.5rem;
+			gap: 3rem;
+		}
+	}
+
+	.page-header {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0 0.5rem;
+		text-align: center;
+		animation: fade-in-up 0.5s ease-out;
+	}
+
+	.eyebrow {
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.2em;
+		color: var(--subtle);
+	}
+
+	.page-title {
+		font-family: var(--font-serif);
+		font-size: 2.5rem;
+		line-height: 1;
+		letter-spacing: -0.02em;
+	}
+
+	@media (min-width: 640px) {
+		.page-title {
+			font-size: 3rem;
+		}
+	}
+
+	@media (min-width: 768px) {
+		.page-title {
+			font-size: 4.5rem;
+		}
+	}
+
+	.tagline {
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		letter-spacing: 0.05em;
+		color: var(--subtle);
+		margin-top: 0.25rem;
+	}
+
+	.search-section {
+		display: flex;
+		width: 100%;
+		justify-content: center;
+		padding: 0 0.5rem;
+		animation: fade-in-up 0.5s ease-out 80ms backwards;
+	}
+</style>
+</file>
+
+<file path="src/app.html">
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<meta
+			name="description"
+			content="Peek at any GitHub profile — explore stats, languages, repositories, and contribution history, beautifully."
+		/>
+
+		<!-- Preconnect for Google Fonts -->
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+		<!-- JetBrains Mono -->
+		<link
+			href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap"
+			rel="stylesheet"
+			media="print"
+			onload="this.media = 'all'"
+			crossorigin="anonymous"
+		/>
+		<noscript>
+			<link
+				href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap"
+				rel="stylesheet"
+				crossorigin="anonymous"
+			/>
+		</noscript>
+
+		<!-- Instrument Serif & DM Mono -->
+		<link
+			href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap"
+			rel="stylesheet"
+			media="print"
+			onload="this.media = 'all'"
+			crossorigin="anonymous"
+		/>
+		<noscript>
+			<link
+				href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap"
+				rel="stylesheet"
+				crossorigin="anonymous"
+			/>
+		</noscript>
+
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="icon" type="image/x-icon" href="/favicon.ico" />
+		<meta property="og:site_name" content="GitPeak" />
+		<script type="application/ld+json">
+		{
+			"@context": "https://schema.org",
+			"@type": "WebSite",
+			"name": "GitPeak",
+			"url": "https://gitpeak.vercel.app/"
+		}
+		</script>
+		<title>GitPeak</title>
+		<script>
+			try {
+				var n = localStorage.getItem("gitpeak-theme")
+				if (n === "custom") {
+					var raw = localStorage.getItem("gitpeak-theme-tokens")
+					if (raw) {
+						var tok = JSON.parse(raw),
+							r = document.documentElement
+						for (var k in tok) r.style.setProperty("--" + k, tok[k])
+					}
+				} else if (n) {
+					document.documentElement.setAttribute("data-theme", n)
+				}
+			} catch (e) {}
+		</script>
+		%sveltekit.head%
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>
+</file>
+
+</files>

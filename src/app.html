@@ -1,79 +1,83 @@
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-		<meta
-			name="description"
-			content="Peek at any GitHub profile — explore stats, languages, repositories, and contribution history, beautifully."
-		/>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      name="description"
+      content="peek at any github profile — explore stats, languages, repositories, and contribution history, beautifully."
+    />
 
-		<!-- Preconnect for Google Fonts -->
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
-		<!-- JetBrains Mono -->
-		<link
-			href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap"
-			rel="stylesheet"
-			media="print"
-			onload="this.media = 'all'"
-			crossorigin="anonymous"
-		/>
-		<noscript>
-			<link
-				href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap"
-				rel="stylesheet"
-				crossorigin="anonymous"
-			/>
-		</noscript>
+    <link
+      href="https://fonts.googleapis.com/css2?family=jetbrains+mono:wght@300;400;500&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media = 'all'"
+    />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=jetbrains+mono:wght@300;400;500&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
 
-		<!-- Instrument Serif & DM Mono -->
-		<link
-			href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap"
-			rel="stylesheet"
-			media="print"
-			onload="this.media = 'all'"
-			crossorigin="anonymous"
-		/>
-		<noscript>
-			<link
-				href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap"
-				rel="stylesheet"
-				crossorigin="anonymous"
-			/>
-		</noscript>
+    <link
+      href="https://fonts.googleapis.com/css2?family=instrument+serif:ital,wght@0,400;1,400&family=dm+mono:ital,wght@0,300;0,400;0,500;1,300&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media = 'all'"
+    />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=instrument+serif:ital,wght@0,400;1,400&family=dm+mono:ital,wght@0,300;0,400;0,500;1,300&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
 
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" type="image/x-icon" href="/favicon.ico" />
-		<meta property="og:site_name" content="GitPeak" />
-		<script type="application/ld+json">
-		{
-			"@context": "https://schema.org",
-			"@type": "WebSite",
-			"name": "GitPeak",
-			"url": "https://gitpeak.vercel.app/"
-		}
-		</script>
-		<title>GitPeak</title>
-		<script>
-			try {
-				var n = localStorage.getItem("gitpeak-theme")
-				if (n === "custom") {
-					var raw = localStorage.getItem("gitpeak-theme-tokens")
-					if (raw) {
-						var tok = JSON.parse(raw),
-							r = document.documentElement
-						for (var k in tok) r.style.setProperty("--" + k, tok[k])
-					}
-				} else if (n) {
-					document.documentElement.setAttribute("data-theme", n)
-				}
-			} catch (e) {}
-		</script>
-		%sveltekit.head%
-	</head>
-	<body data-sveltekit-preload-data="hover">
-		<div style="display: contents">%sveltekit.body%</div>
-	</body>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <meta property="og:site_name" content="gitpeak" />
+    
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "website",
+        "name": "gitpeak",
+        "url": "https://gitpeak.vercel.app/"
+      }
+    </script>
+    
+    <title>gitpeak</title>
+    
+    <script>
+      try {
+        const savedThemeName = localStorage.getItem("gitpeak-theme");
+        
+        if (savedThemeName === "custom") {
+          const rawThemeTokens = localStorage.getItem("gitpeak-theme-tokens");
+          
+          if (rawThemeTokens) {
+            const parsedThemeTokens = JSON.parse(rawThemeTokens);
+            const rootElement = document.documentElement;
+            
+            for (const tokenKey in parsedThemeTokens) {
+              rootElement.style.setProperty("--" + tokenKey, parsedThemeTokens[tokenKey]);
+            }
+          }
+        } else if (savedThemeName) {
+          document.documentElement.setAttribute("data-theme", savedThemeName);
+        }
+      } catch (error) {
+        console.warn("failed to restore gitpeak theme from local storage", error);
+      }
+    </script>
+    
+    %sveltekit.head%
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">%sveltekit.body%</div>
+  </body>
 </html>
