@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fade } from 'svelte/transition'
   import type { OrbitNode } from '../../models/orbit-calculations'
 
   let {
@@ -68,6 +69,7 @@
   {#each orbitNodes as node, index (node.url)}
     {@const isHovered = hoveredIndex === index}
     <g
+      transition:fade={{ duration: 200 }}
       role="button"
       tabindex="0"
       aria-label="View {node.name}"
