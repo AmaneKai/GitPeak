@@ -9,7 +9,9 @@
   import { Card, CardContent, CardHeader } from '$lib/components/ui/card'
   import { Tabs, TabsList, TabsTrigger } from '$lib/components/ui/tabs'
   import * as Avatar from '$lib/components/ui/avatar'
-  import { Orbit, Palette } from 'lucide-svelte'
+  import { Orbit, Palette, Globe, User, Users } from 'lucide-svelte'
+  import { fade, scale } from 'svelte/transition'
+  import * as Tooltip from '$lib/components/ui/tooltip'
 
   import { cn } from '$lib/ui/styling/class-merger'
 
@@ -24,13 +26,21 @@
   } = $props()
 
   let viewMode = $state<'languages' | 'orbit'>('languages')
+  let ownershipFilter = $state<'all' | 'owned' | 'others'>('all')
   let hoveredIndex = $state<number | null>(null)
 
   const pieManager = useLanguagePie(() => languages)
 
+  const filteredRepos = $derived.by(() => {
+    if (viewMode === 'languages') return involvedRepos
+    if (ownershipFilter === 'owned') return involvedRepos.filter((r) => r.isOwned)
+    if (ownershipFilter === 'others') return involvedRepos.filter((r) => !r.isOwned)
+    return involvedRepos
+  })
+
   const orbitNodes = $derived(
     calculateOrbitNodes(
-      involvedRepos,
+      filteredRepos,
       languages,
       pieManager.dimensions.centerX,
       pieManager.dimensions.centerY,
@@ -75,7 +85,7 @@
     </div>
   </CardHeader>
 
-  <CardContent class="p-4 pt-4 sm:p-5">
+  <CardContent class="min-h-[300px] p-4 pb-16 pt-4 sm:p-5 sm:pb-16">
     <div
       class="flex flex-col items-center justify-center gap-5
         sm:flex-row sm:items-start"
@@ -161,9 +171,71 @@
             </Avatar.Fallback>
           </Avatar.Root>
         </button>
+
+        {#if viewMode === 'orbit'}
+          <div
+            transition:scale={{ duration: 250, start: 0.9 }}
+            class="bg-base/80 border-subtle/10 absolute -bottom-16 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-full border p-1 shadow-lg backdrop-blur-md"
+          >
+            <Tooltip.Provider delayDuration={100}>
+              <Tooltip.Root>
+                <Tooltip.Trigger>
+                  <button
+                    class={cn(
+                      'flex h-6 w-6 items-center justify-center rounded-full transition-all',
+                      ownershipFilter === 'all'
+                        ? 'bg-iris/20 text-iris'
+                        : 'text-muted hover:bg-black/5 hover:text-subtle',
+                    )}
+                    onclick={() => (ownershipFilter = 'all')}
+                  >
+                    <Globe size={11} />
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Content side="top" class="font-mono text-[9px]">All Repos</Tooltip.Content>
+              </Tooltip.Root>
+
+              <Tooltip.Root>
+                <Tooltip.Trigger>
+                  <button
+                    class={cn(
+                      'flex h-6 w-6 items-center justify-center rounded-full transition-all',
+                      ownershipFilter === 'owned'
+                        ? 'bg-iris/20 text-iris'
+                        : 'text-muted hover:bg-black/5 hover:text-subtle',
+                    )}
+                    onclick={() => (ownershipFilter = 'owned')}
+                  >
+                    <User size={11} />
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Content side="top" class="font-mono text-[9px]">My Repos</Tooltip.Content>
+              </Tooltip.Root>
+
+              <Tooltip.Root>
+                <Tooltip.Trigger>
+                  <button
+                    class={cn(
+                      'flex h-6 w-6 items-center justify-center rounded-full transition-all',
+                      ownershipFilter === 'others'
+                        ? 'bg-iris/20 text-iris'
+                        : 'text-muted hover:bg-black/5 hover:text-subtle',
+                    )}
+                    onclick={() => (ownershipFilter = 'others')}
+                  >
+                    <Users size={11} />
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Content side="top" class="font-mono text-[9px]">Contributions</Tooltip.Content>
+              </Tooltip.Root>
+            </Tooltip.Provider>
+          </div>
+        {/if}
       </div>
 
-      <ChartLegend {viewMode} slices={pieManager.slices} {orbitNodes} bind:hoveredIndex />
+      <div class="w-full sm:w-64">
+        <ChartLegend {viewMode} slices={pieManager.slices} {orbitNodes} bind:hoveredIndex />
+      </div>
     </div>
   </CardContent>
 </Card>
