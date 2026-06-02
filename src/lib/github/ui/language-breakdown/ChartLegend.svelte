@@ -1,5 +1,6 @@
 <script lang="ts">
   import { langIconUrl as getLanguageIconUrl } from '$lib/github/ui/language-icons'
+  import { fade } from 'svelte/transition'
   import type { PieSlice } from './useLanguagePie.svelte'
   import type { OrbitNode } from '../../models/orbit-calculations'
   import { ScrollArea } from '$lib/components/ui/scroll-area'
@@ -124,6 +125,7 @@
           {@const isNodeActive = hoveredIndex === index}
 
           <button
+            transition:fade={{ duration: 150 }}
             type="button"
             class={cn(
               'flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-left',
