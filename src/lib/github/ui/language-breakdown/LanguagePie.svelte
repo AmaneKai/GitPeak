@@ -63,6 +63,61 @@
   const buttonOffset = $derived((pieManager.dimensions.sizePixels - buttonSize) / 2)
 </script>
 
+{#snippet ownershipToggle()}
+  <Tooltip.Provider delayDuration={0}>
+    <Tooltip.Root>
+      <Tooltip.Trigger>
+        <button
+          class={cn(
+            'flex h-6 w-6 items-center justify-center rounded-full transition-all',
+            ownershipFilter === 'all'
+              ? 'bg-iris/20 text-iris'
+              : 'text-muted hover:bg-black/5 hover:text-subtle',
+          )}
+          onclick={() => (ownershipFilter = 'all')}
+        >
+          <Globe size={11} />
+        </button>
+      </Tooltip.Trigger>
+      <Tooltip.Content side="top" sideOffset={8}>All Repos</Tooltip.Content>
+    </Tooltip.Root>
+
+    <Tooltip.Root>
+      <Tooltip.Trigger>
+        <button
+          class={cn(
+            'flex h-6 w-6 items-center justify-center rounded-full transition-all',
+            ownershipFilter === 'owned'
+              ? 'bg-iris/20 text-iris'
+              : 'text-muted hover:bg-black/5 hover:text-subtle',
+          )}
+          onclick={() => (ownershipFilter = 'owned')}
+        >
+          <User size={11} />
+        </button>
+      </Tooltip.Trigger>
+      <Tooltip.Content side="top" sideOffset={8}>My Repos</Tooltip.Content>
+    </Tooltip.Root>
+
+    <Tooltip.Root>
+      <Tooltip.Trigger>
+        <button
+          class={cn(
+            'flex h-6 w-6 items-center justify-center rounded-full transition-all',
+            ownershipFilter === 'others'
+              ? 'bg-iris/20 text-iris'
+              : 'text-muted hover:bg-black/5 hover:text-subtle',
+          )}
+          onclick={() => (ownershipFilter = 'others')}
+        >
+          <Users size={11} />
+        </button>
+      </Tooltip.Trigger>
+      <Tooltip.Content side="top" sideOffset={8}>Contributions</Tooltip.Content>
+    </Tooltip.Root>
+  </Tooltip.Provider>
+{/snippet}
+
 <Card class="glass overflow-hidden rounded-2xl">
   <CardHeader class="p-4 pb-0 sm:p-5">
     <div class="flex items-center justify-between gap-2">
@@ -85,7 +140,7 @@
     </div>
   </CardHeader>
 
-  <CardContent class="min-h-[300px] p-4 pb-16 pt-4 sm:p-5 sm:pb-16">
+  <CardContent class="min-h-[300px] p-4 pb-8 pt-4 sm:p-5 sm:pb-16">
     <div
       class="flex flex-col items-center justify-center gap-5
         sm:flex-row sm:items-start"
@@ -175,63 +230,22 @@
         {#if viewMode === 'orbit'}
           <div
             transition:scale={{ duration: 250, start: 0.9 }}
-            class="bg-base/80 border-subtle/10 absolute -bottom-16 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-full border p-1 shadow-lg backdrop-blur-md"
+            class="bg-base/80 border-subtle/10 absolute -bottom-16 left-1/2 hidden -translate-x-1/2 items-center gap-0.5 rounded-full border p-1 shadow-lg backdrop-blur-md sm:flex"
           >
-            <Tooltip.Provider delayDuration={0}>
-              <Tooltip.Root>
-                <Tooltip.Trigger>
-                  <button
-                    class={cn(
-                      'flex h-6 w-6 items-center justify-center rounded-full transition-all',
-                      ownershipFilter === 'all'
-                        ? 'bg-iris/20 text-iris'
-                        : 'text-muted hover:bg-black/5 hover:text-subtle',
-                    )}
-                    onclick={() => (ownershipFilter = 'all')}
-                  >
-                    <Globe size={11} />
-                  </button>
-                </Tooltip.Trigger>
-                <Tooltip.Content side="top" sideOffset={8}>All Repos</Tooltip.Content>
-              </Tooltip.Root>
-
-              <Tooltip.Root>
-                <Tooltip.Trigger>
-                  <button
-                    class={cn(
-                      'flex h-6 w-6 items-center justify-center rounded-full transition-all',
-                      ownershipFilter === 'owned'
-                        ? 'bg-iris/20 text-iris'
-                        : 'text-muted hover:bg-black/5 hover:text-subtle',
-                    )}
-                    onclick={() => (ownershipFilter = 'owned')}
-                  >
-                    <User size={11} />
-                  </button>
-                </Tooltip.Trigger>
-                <Tooltip.Content side="top" sideOffset={8}>My Repos</Tooltip.Content>
-              </Tooltip.Root>
-
-              <Tooltip.Root>
-                <Tooltip.Trigger>
-                  <button
-                    class={cn(
-                      'flex h-6 w-6 items-center justify-center rounded-full transition-all',
-                      ownershipFilter === 'others'
-                        ? 'bg-iris/20 text-iris'
-                        : 'text-muted hover:bg-black/5 hover:text-subtle',
-                    )}
-                    onclick={() => (ownershipFilter = 'others')}
-                  >
-                    <Users size={11} />
-                  </button>
-                </Tooltip.Trigger>
-                <Tooltip.Content side="top" sideOffset={8}>Contributions</Tooltip.Content>
-              </Tooltip.Root>
-            </Tooltip.Provider>
+            {@render ownershipToggle()}
           </div>
         {/if}
       </div>
+
+      {#if viewMode === 'orbit'}
+        <div class="flex sm:hidden" transition:fade={{ duration: 200 }}>
+          <div
+            class="bg-base/80 border-subtle/10 flex items-center gap-0.5 rounded-full border p-1 shadow-lg backdrop-blur-md"
+          >
+            {@render ownershipToggle()}
+          </div>
+        </div>
+      {/if}
 
       <div class="w-full sm:w-64">
         <ChartLegend {viewMode} slices={pieManager.slices} {orbitNodes} bind:hoveredIndex />
