@@ -10,6 +10,8 @@ export interface InvolvedRepo {
   primaryLanguage: string | null
   url: string
   lastContributedAt: string
+  isOwned: boolean
+  stars: number
 }
 
 export interface MostStarredRepo {
