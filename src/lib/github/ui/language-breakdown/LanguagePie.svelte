@@ -177,7 +177,7 @@
             transition:scale={{ duration: 250, start: 0.9 }}
             class="bg-base/80 border-subtle/10 absolute -bottom-16 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-full border p-1 shadow-lg backdrop-blur-md"
           >
-            <Tooltip.Provider delayDuration={100}>
+            <Tooltip.Provider delayDuration={0}>
               <Tooltip.Root>
                 <Tooltip.Trigger>
                   <button
@@ -192,7 +192,7 @@
                     <Globe size={11} />
                   </button>
                 </Tooltip.Trigger>
-                <Tooltip.Content side="top" class="font-mono text-[9px]">All Repos</Tooltip.Content>
+                <Tooltip.Content side="top" sideOffset={8}>All Repos</Tooltip.Content>
               </Tooltip.Root>
 
               <Tooltip.Root>
@@ -209,7 +209,7 @@
                     <User size={11} />
                   </button>
                 </Tooltip.Trigger>
-                <Tooltip.Content side="top" class="font-mono text-[9px]">My Repos</Tooltip.Content>
+                <Tooltip.Content side="top" sideOffset={8}>My Repos</Tooltip.Content>
               </Tooltip.Root>
 
               <Tooltip.Root>
@@ -226,7 +226,7 @@
                     <Users size={11} />
                   </button>
                 </Tooltip.Trigger>
-                <Tooltip.Content side="top" class="font-mono text-[9px]">Contributions</Tooltip.Content>
+                <Tooltip.Content side="top" sideOffset={8}>Contributions</Tooltip.Content>
               </Tooltip.Root>
             </Tooltip.Provider>
           </div>
