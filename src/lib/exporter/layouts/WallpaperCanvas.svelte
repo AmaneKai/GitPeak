@@ -267,7 +267,6 @@
     align-items: stretch;
     padding: calc(var(--scale-unit) * 5);
     box-sizing: border-box;
-    overflow: hidden;
   }
 
   .ls-profile {
@@ -278,7 +277,6 @@
     padding-right: calc(var(--scale-unit) * 4.5);
     border-right: 1px solid rgba(255, 255, 255, 0.08);
     min-height: 0;
-    overflow: hidden;
   }
 
   .ls-right {
@@ -288,7 +286,6 @@
     gap: calc(var(--scale-unit) * 2.2);
     justify-content: center;
     min-height: 0;
-    overflow: hidden;
   }
 
   .avatar {
@@ -452,7 +449,6 @@
     gap: calc(var(--scale-unit) * 2.5);
     flex-shrink: 1;
     min-height: 0;
-    overflow: hidden;
   }
 
   .matrix-wrapper {
@@ -486,7 +482,6 @@
     gap: calc(var(--scale-unit) * 0.8);
     min-width: 0;
     min-height: 0;
-    overflow: hidden;
     padding: calc(var(--scale-unit) * 0.5) 0;
   }
 
