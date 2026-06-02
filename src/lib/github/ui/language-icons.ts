@@ -19,7 +19,7 @@ const SIMPLE_ICONS: Readonly<Record<string, string>> = {
   shell: 'gnubash',
   bash: 'gnubash',
   html: 'html5',
-  css: 'css3',
+  css: 'css',
   scss: 'sass',
   sass: 'sass',
   vue: 'vuedotjs',
@@ -37,6 +37,10 @@ const SIMPLE_ICONS: Readonly<Record<string, string>> = {
   'f#': 'fsharp',
   groovy: 'apachegroovy',
   markdown: 'markdown',
+  'jupyter notebook': 'jupyter',
+  typst: 'typst',
+  makefile: 'make',
+  autohotkey: 'autohotkey',
 } as const
 
 const DIRECT_ICONS: Readonly<Record<string, string>> = {
