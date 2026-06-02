@@ -1,42 +1,42 @@
 const SIMPLE_ICONS: Readonly<Record<string, string>> = {
-  TypeScript: 'typescript',
-  JavaScript: 'javascript',
-  Python: 'python',
-  Rust: 'rust',
-  Go: 'go',
-  Ruby: 'ruby',
-  Kotlin: 'kotlin',
-  Swift: 'swift',
-  C: 'c',
-  'C++': 'cplusplus',
-  'C#': 'csharp',
-  PHP: 'php',
-  Dart: 'dart',
-  Scala: 'scala',
-  Elixir: 'elixir',
-  Haskell: 'haskell',
-  Lua: 'lua',
-  Shell: 'gnubash',
-  Bash: 'gnubash',
-  HTML: 'html5',
-  CSS: 'css',
-  SCSS: 'sass',
-  Sass: 'sass',
-  Vue: 'vuedotjs',
-  Svelte: 'svelte',
-  Astro: 'astro',
-  Dockerfile: 'docker',
-  Nix: 'nixos',
-  Zig: 'zig',
-  Clojure: 'clojure',
-  Erlang: 'erlang',
-  R: 'r',
-  Julia: 'julia',
-  Perl: 'perl',
-  OCaml: 'ocaml',
-  'F#': 'fsharp',
-  Groovy: 'apachegroovy',
-  Markdown: 'markdown',
+  typescript: 'typescript',
+  javascript: 'javascript',
+  python: 'python',
+  rust: 'rust',
+  go: 'go',
+  ruby: 'ruby',
+  kotlin: 'kotlin',
+  swift: 'swift',
+  c: 'c',
+  'c++': 'cplusplus',
+  'c#': 'dotnet',
+  php: 'php',
+  dart: 'dart',
+  scala: 'scala',
+  elixir: 'elixir',
+  haskell: 'haskell',
+  lua: 'lua',
+  shell: 'gnubash',
+  bash: 'gnubash',
+  html: 'html5',
+  css: 'css3',
+  scss: 'sass',
+  sass: 'sass',
+  vue: 'vuedotjs',
+  svelte: 'svelte',
+  astro: 'astro',
+  dockerfile: 'docker',
+  nix: 'nixos',
+  zig: 'zig',
+  clojure: 'clojure',
+  erlang: 'erlang',
+  r: 'r',
+  julia: 'julia',
+  perl: 'perl',
+  ocaml: 'ocaml',
+  'f#': 'fsharp',
+  groovy: 'apachegroovy',
+  markdown: 'markdown',
 } as const
 
 const DIRECT_ICONS: Readonly<Record<string, string>> = {
@@ -44,9 +44,11 @@ const DIRECT_ICONS: Readonly<Record<string, string>> = {
 } as const
 
 export function langIconUrl(name: string): string {
-  if (DIRECT_ICONS[name]) 
-    return DIRECT_ICONS[name]
-  const slug = SIMPLE_ICONS[name]
+  if (DIRECT_ICONS[name]) return DIRECT_ICONS[name]
+
+  const normalizedName = name.toLowerCase()
+  const slug = SIMPLE_ICONS[normalizedName]
+
   return slug ? `https://cdn.simpleicons.org/${slug}` : ''
 }
 
