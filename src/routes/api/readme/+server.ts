@@ -1,6 +1,8 @@
+import { render } from 'svelte/server'
 import { createGithubClient } from '$lib/github/api/github-client'
 import { PRESET_THEMES } from '$lib/theme/theme-manager'
-import { assembleReadmeSvg } from '$lib/readme/svg-generator'
+import ReadmeCard from '$lib/readme/ReadmeCard.svelte'
+import { buildReadmeFontStyles } from '$lib/readme/readme-font-styles'
 import type { RequestHandler } from './$types'
 
 let fontCache: Promise<{ mono: string; serif: string }> | null = null
@@ -16,6 +18,23 @@ async function fetchBase64(url: string | null | undefined): Promise<string> {
 
     const buffer = await response.arrayBuffer()
     return Buffer.from(buffer).toString('base64')
+  } catch {
+    return ''
+  }
+}
+
+async function fetchAsDataUri(url: string | null | undefined): Promise<string> {
+  if (!url)
+    return ''
+
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(3000) })
+    if (!response.ok)
+      return ''
+
+    const contentType = response.headers.get('content-type') || 'image/png'
+    const buffer = await response.arrayBuffer()
+    return `data:${contentType};base64,${Buffer.from(buffer).toString('base64')}`
   } catch {
     return ''
   }
@@ -71,12 +90,14 @@ export const GET: RequestHandler = async (event) => {
   const statistics = result.value
   statistics.languages = Array.isArray(statistics.languages) ? statistics.languages : []
 
-  const [{ mono: monoB64, serif: serifB64 }, avatarB64] = await Promise.all([
+  const [{ mono: monoB64, serif: serifB64 }, avatarDataUri] = await Promise.all([
     getFonts(),
-    fetchBase64(statistics.avatarUrl),
+    fetchAsDataUri(statistics.avatarUrl),
   ])
 
-  const svg = assembleReadmeSvg(statistics, username, theme, monoB64, serifB64, avatarB64)
+  const { body } = render(ReadmeCard, { props: { statistics, username, theme, avatarDataUri } })
+  const fontStyles = buildReadmeFontStyles(monoB64, serifB64, theme)
+  const svg = body.replace('<defs>', `<defs><style>${fontStyles}</style>`)
 
   return new Response(svg, {
     headers: {

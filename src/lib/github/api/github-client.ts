@@ -1,5 +1,5 @@
 import { error, ok, type Result } from '$lib/core/network/result-type'
-import type { GithubStats } from '../models/github-stats'
+import { githubStatsSchema, type GithubStats } from '../models/github-stats'
 
 export interface GithubClientConfig {
   apiUrl: string
@@ -17,7 +17,7 @@ function getErrorMessage(status: number): string {
     [NOT_FOUND]: 'GitHub user not found',
     [RATE_LIMITED]: 'Rate limited — try again in a moment',
     [BAD_GATEWAY]: 'Service is unavailable, try again shortly',
-    [SERVICE_UNAVAILABLE]: 'Service is unavailable, try again shortly'
+    [SERVICE_UNAVAILABLE]: 'Service is unavailable, try again shortly',
   }
 
   if (status >= INTERNAL_SERVER_ERROR)
@@ -36,7 +36,7 @@ function keysToCamel(item: unknown): unknown {
       const camelKey = key.replace(/_([a-z])/g, (_, char) => char.toUpperCase())
       return {
         ...result,
-        [camelKey]: keysToCamel(record[key])
+        [camelKey]: keysToCamel(record[key]),
       }
     }, {})
   }
@@ -49,16 +49,13 @@ export function createGithubClient(config: GithubClientConfig) {
     async fetchStats(username: string): Promise<Result<GithubStats>> {
       const sanitizedUsername = username.trim().toLowerCase()
       const controller = new AbortController()
-      
-      const timeoutId = setTimeout(
-        () => controller.abort(), 
-        config.requestTimeoutMilliseconds
-      )
+
+      const timeoutId = setTimeout(() => controller.abort(), config.requestTimeoutMilliseconds)
 
       try {
         const encodedUsername = encodeURIComponent(sanitizedUsername)
         const url = `${config.apiUrl}?username=${encodedUsername}&_t=${Date.now()}`
-        
+
         const response = await fetch(url, { signal: controller.signal })
         clearTimeout(timeoutId)
 
@@ -69,19 +66,22 @@ export function createGithubClient(config: GithubClientConfig) {
         if (!rawResponse.ok)
           return error('Could not load this profile — try again')
 
-        const camelData = keysToCamel(rawResponse.data) as GithubStats
-        return ok(camelData)
+        const parsedStats = githubStatsSchema.safeParse(keysToCamel(rawResponse.data))
+        if (!parsedStats.success)
+          return error('Received an unexpected response — try again')
+
+        return ok(parsedStats.data)
       } catch (caughtError: unknown) {
         clearTimeout(timeoutId)
-        
+
         if (caughtError instanceof Error) {
           if (caughtError.name === 'AbortError')
             return error('Request timed out')
           return error(caughtError.message)
         }
-          
+
         return error('Network connection failed')
       }
-    }
+    },
   }
 }

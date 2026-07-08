@@ -2,11 +2,21 @@
   import '../app.css'
   import { Toaster } from 'svelte-sonner'
   import { onMount } from 'svelte'
+  import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query'
   import { initTheme } from '$lib/theme/theme-manager'
 
   let { children } = $props()
 
   onMount(() => initTheme())
+
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        refetchOnWindowFocus: false,
+      },
+    },
+  })
 
   const toastStyle = [
     'background: #26233a',
@@ -18,6 +28,8 @@
   ].join(';')
 </script>
 
-<Toaster position="bottom-right" toastOptions={{ style: toastStyle }} />
+<QueryClientProvider client={queryClient}>
+  <Toaster position="bottom-right" toastOptions={{ style: toastStyle }} />
 
-{@render children()}
+  {@render children()}
+</QueryClientProvider>

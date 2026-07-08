@@ -1,39 +1,46 @@
-export interface GitHubLanguage {
-  name: string
-  percentage: number
-  color?: string
-}
+import { z } from 'zod'
 
-export interface InvolvedRepo {
-  owner: string
-  name: string
-  primaryLanguage: string | null
-  url: string
-  lastContributedAt: string
-  isOwned: boolean
-  stars: number
-}
+export const gitHubLanguageSchema = z.object({
+  name: z.string(),
+  percentage: z.number(),
+  color: z.string().optional(),
+})
 
-export interface MostStarredRepo {
-  name: string
-  stars: number
-  url: string
-}
+export const involvedRepoSchema = z.object({
+  owner: z.string(),
+  name: z.string(),
+  primaryLanguage: z.string().nullable(),
+  url: z.string(),
+  lastContributedAt: z.string(),
+  isOwned: z.boolean(),
+  stars: z.number(),
+})
 
-export interface GithubStats {
-  displayName: string | null
-  avatarUrl: string
-  bio: string | null
-  followers: number
-  following: number
-  accountCreatedAt: string
-  languages: GitHubLanguage[]
-  involvedRepos: InvolvedRepo[]
-  mostStarredRepo: MostStarredRepo | null
-  totalContributions: number
-  totalCommits: number
-  totalStars: number
-  totalRepos: number
-  totalPrs: number
-  totalIssues: number
-}
+export const mostStarredRepoSchema = z.object({
+  name: z.string(),
+  stars: z.number(),
+  url: z.string(),
+})
+
+export const githubStatsSchema = z.object({
+  displayName: z.string().nullable(),
+  avatarUrl: z.string(),
+  bio: z.string().nullable(),
+  followers: z.number(),
+  following: z.number(),
+  accountCreatedAt: z.string(),
+  languages: z.array(gitHubLanguageSchema),
+  involvedRepos: z.array(involvedRepoSchema),
+  mostStarredRepo: mostStarredRepoSchema.nullable(),
+  totalContributions: z.number(),
+  totalCommits: z.number(),
+  totalStars: z.number(),
+  totalRepos: z.number(),
+  totalPrs: z.number(),
+  totalIssues: z.number(),
+})
+
+export type GitHubLanguage = z.infer<typeof gitHubLanguageSchema>
+export type InvolvedRepo = z.infer<typeof involvedRepoSchema>
+export type MostStarredRepo = z.infer<typeof mostStarredRepoSchema>
+export type GithubStats = z.infer<typeof githubStatsSchema>

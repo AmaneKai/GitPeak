@@ -54,6 +54,7 @@
 	},
 	"dependencies": {
 		"@resvg/resvg-js": "^2.6.2",
+		"@tanstack/svelte-query": "^6.1.36",
 		"chart.js": "^4.5.1",
 		"html-to-image": "^1.11.13",
 		"lucide-svelte": "^1.0.1",
