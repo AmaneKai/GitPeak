@@ -6,6 +6,7 @@
     getDimensions,
     generateArcPath,
   } from '$lib/github/ui/language-breakdown/useLanguagePie.svelte'
+  import { buildSweepRevealMask } from './sweep-reveal-mask'
   import ReadmeTopRepo from './ReadmeTopRepo.svelte'
 
   let {
@@ -37,15 +38,6 @@
   const MAX_LEGEND_ROWS = 8
   const ACCENT_TOKENS = ACCENT_COLORS.map((cssVariable) => cssVariable.slice('var(--'.length, -1))
 
-  const SWEEP_BASE_DELAY_SECONDS = 0.35
-  const SWEEP_DURATION_SECONDS = 1
-
-  function sweepDelaySeconds(startAngleDegrees: number): number {
-    const easedProgress = Math.min(Math.max((startAngleDegrees + 90) / 360, 0), 1)
-    const linearProgress = 1 - Math.cbrt(1 - easedProgress)
-    return SWEEP_BASE_DELAY_SECONDS + linearProgress * SWEEP_DURATION_SECONDS
-  }
-
   const dimensions = getDimensions(true)
   const donutX = $derived(x + 24)
   const donutY = $derived(y + 64)
@@ -63,6 +55,25 @@
   )
   const legendSlices = $derived(slices.slice(0, MAX_LEGEND_ROWS))
   const legendX = $derived(donutX + dimensions.sizePixels + 24)
+
+  const SWEEP_BEGIN_SECONDS = 0.4
+
+  const sweepMaskRadius = dimensions.outerRadiusPixels + 4
+  const sweepMask = $derived(buildSweepRevealMask(centerX, centerY, sweepMaskRadius))
+  const sweepMaskBox = $derived({
+    x: centerX - sweepMaskRadius,
+    y: centerY - sweepMaskRadius,
+    size: sweepMaskRadius * 2,
+  })
+
+  // Mirrors the cubic ease-out sweep's own timing, so each slice's little pop/settle
+  // lands right as the mask sweep reveals it — combining the true arc-growth
+  // construction with the earlier per-slice "pop in" flourish.
+  function sweepDelaySeconds(startAngleDegrees: number): number {
+    const easedProgress = Math.min(Math.max((startAngleDegrees + 90) / 360, 0), 1)
+    const linearProgress = 1 - Math.cbrt(1 - easedProgress)
+    return SWEEP_BEGIN_SECONDS + linearProgress * sweepMask.durSeconds
+  }
 
   const topRepoY = $derived(y + height - BOTTOM_MARGIN - TOP_REPO_HEIGHT)
   const dividerY = $derived(topRepoY - DIVIDER_GAP)
@@ -128,24 +139,56 @@
   stroke-width={dimensions.outerRadiusPixels - dimensions.innerRadiusPixels + 1}
 />
 
-{#each slices as slice (slice.name)}
-  {@const pathD = generateArcPath(
-    centerX,
-    centerY,
-    dimensions.outerRadiusPixels,
-    dimensions.innerRadiusPixels,
-    slice.startAngleDegrees,
-    slice.endAngleDegrees,
-  )}
-  <path
-    d={pathD}
-    fill={slice.color}
-    class="anim-slice"
-    style="transform-origin:{centerX}px {centerY}px; animation-delay:{sweepDelaySeconds(
-      slice.startAngleDegrees,
-    )}s"
-  />
-{/each}
+{#if slices.length > 0}
+  <mask
+    id="lang-sweep-mask"
+    maskUnits="userSpaceOnUse"
+    x={sweepMaskBox.x}
+    y={sweepMaskBox.y}
+    width={sweepMaskBox.size}
+    height={sweepMaskBox.size}
+  >
+    <rect
+      x={sweepMaskBox.x}
+      y={sweepMaskBox.y}
+      width={sweepMaskBox.size}
+      height={sweepMaskBox.size}
+      fill="black"
+    />
+    <path d={sweepMask.baseD} fill="white">
+      <animate
+        attributeName="d"
+        values={sweepMask.values}
+        keyTimes={sweepMask.keyTimes}
+        dur="{sweepMask.durSeconds}s"
+        begin="{SWEEP_BEGIN_SECONDS}s"
+        fill="freeze"
+        calcMode="discrete"
+      />
+    </path>
+  </mask>
+
+  <g mask="url(#lang-sweep-mask)">
+    {#each slices as slice (slice.name)}
+      {@const pathD = generateArcPath(
+        centerX,
+        centerY,
+        dimensions.outerRadiusPixels,
+        dimensions.innerRadiusPixels,
+        slice.startAngleDegrees,
+        slice.endAngleDegrees,
+      )}
+      <path
+        d={pathD}
+        fill={slice.color}
+        class="anim-slice"
+        style="transform-origin:{centerX}px {centerY}px; animation-delay:{sweepDelaySeconds(
+          slice.startAngleDegrees,
+        )}s"
+      />
+    {/each}
+  </g>
+{/if}
 
 <clipPath id="lang-avatar-clip">
   <circle cx={centerX} cy={centerY} r={avatarRadius} />
