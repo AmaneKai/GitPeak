@@ -3,72 +3,8 @@ import { createGithubClient } from '$lib/github/api/github-client'
 import { PRESET_THEMES } from '$lib/theme/theme-manager'
 import ReadmeCard from '$lib/readme/ReadmeCard.svelte'
 import { buildReadmeFontStyles } from '$lib/readme/readme-font-styles'
+import { fetchAsDataUri, getReadmeFonts } from '$lib/readme/server-assets'
 import type { RequestHandler } from './$types'
-
-let fontCache: Promise<{ mono: string; serif: string }> | null = null
-
-async function fetchBase64(url: string | null | undefined): Promise<string> {
-  if (!url)
-    return ''
-
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(3000) })
-    if (!response.ok)
-      return ''
-
-    const buffer = await response.arrayBuffer()
-    return Buffer.from(buffer).toString('base64')
-  } catch {
-    return ''
-  }
-}
-
-async function fetchAsDataUri(url: string | null | undefined): Promise<string> {
-  if (!url)
-    return ''
-
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(3000) })
-    if (!response.ok)
-      return ''
-
-    const contentType = response.headers.get('content-type') || 'image/png'
-    const buffer = await response.arrayBuffer()
-    return `data:${contentType};base64,${Buffer.from(buffer).toString('base64')}`
-  } catch {
-    return ''
-  }
-}
-
-async function loadFontB64(family: string, weight: number): Promise<string> {
-  const familyQuery = family.replace(/ /g, '+')
-  const url = `https://fonts.googleapis.com/css2?family=${familyQuery}:wght@${weight}&display=swap`
-  const userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_6_8)'
-
-  try {
-    const css = await fetch(url, { headers: { 'User-Agent': userAgent } }).then(r => r.text())
-    const match = css.match(/src: url\((.+?)\) format\('(opentype|truetype)'\)/)
-
-    if (!match) {
-      console.warn(`[readme] Could not parse font URL for ${family} ${weight}`)
-      return ''
-    }
-
-    return fetchBase64(match[1])
-  } catch (error) {
-    console.warn(`[readme] Font load failed for ${family} ${weight}:`, error)
-    return ''
-  }
-}
-
-function getFonts(): Promise<{ mono: string; serif: string }> {
-  fontCache ??= Promise.all([
-    loadFontB64('JetBrains Mono', 400),
-    loadFontB64('Instrument Serif', 400),
-  ]).then(([mono, serif]) => ({ mono, serif }))
-
-  return fontCache
-}
 
 export const GET: RequestHandler = async (event) => {
   const username = event.url.searchParams.get('username')?.trim()
@@ -91,7 +27,7 @@ export const GET: RequestHandler = async (event) => {
   statistics.languages = Array.isArray(statistics.languages) ? statistics.languages : []
 
   const [{ mono: monoB64, serif: serifB64 }, avatarDataUri] = await Promise.all([
-    getFonts(),
+    getReadmeFonts(),
     fetchAsDataUri(statistics.avatarUrl),
   ])
 

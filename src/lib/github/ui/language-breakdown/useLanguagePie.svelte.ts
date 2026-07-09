@@ -25,7 +25,7 @@ export function getDimensions(isMobileDevice: boolean) {
   }
 }
 
-function polarToCoordinates(centerX: number, centerY: number, radius: number, degrees: number) {
+export function polarToCoordinates(centerX: number, centerY: number, radius: number, degrees: number) {
   const radians = (degrees * Math.PI) / 180
   
   return { 
