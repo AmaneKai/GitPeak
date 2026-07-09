@@ -29,9 +29,7 @@
             <span class="font-mono text-[9px] tracking-[0.2em] text-(--muted) uppercase">
               ★ most starred repository
             </span>
-            <span
-              class="truncate font-serif text-lg leading-tight font-semibold text-(--text)"
-            >
+            <span class="truncate font-serif text-lg leading-tight font-semibold text-(--text)">
               {repository?.name}
             </span>
 

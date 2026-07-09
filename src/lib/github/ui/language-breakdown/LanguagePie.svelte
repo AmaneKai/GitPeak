@@ -72,7 +72,7 @@
             'flex h-6 w-6 items-center justify-center rounded-full transition-all',
             ownershipFilter === 'all'
               ? 'bg-iris/20 text-iris'
-              : 'text-muted hover:bg-black/5 hover:text-subtle',
+              : 'text-muted hover:text-subtle hover:bg-black/5',
           )}
           onclick={() => (ownershipFilter = 'all')}
         >
@@ -89,7 +89,7 @@
             'flex h-6 w-6 items-center justify-center rounded-full transition-all',
             ownershipFilter === 'owned'
               ? 'bg-iris/20 text-iris'
-              : 'text-muted hover:bg-black/5 hover:text-subtle',
+              : 'text-muted hover:text-subtle hover:bg-black/5',
           )}
           onclick={() => (ownershipFilter = 'owned')}
         >
@@ -106,7 +106,7 @@
             'flex h-6 w-6 items-center justify-center rounded-full transition-all',
             ownershipFilter === 'others'
               ? 'bg-iris/20 text-iris'
-              : 'text-muted hover:bg-black/5 hover:text-subtle',
+              : 'text-muted hover:text-subtle hover:bg-black/5',
           )}
           onclick={() => (ownershipFilter = 'others')}
         >
@@ -140,7 +140,7 @@
     </div>
   </CardHeader>
 
-  <CardContent class="min-h-[300px] p-4 pb-8 pt-4 sm:p-5 sm:pb-16">
+  <CardContent class="min-h-[300px] p-4 pt-4 pb-8 sm:p-5 sm:pb-16">
     <div
       class="flex flex-col items-center justify-center gap-5
         sm:flex-row sm:items-start"

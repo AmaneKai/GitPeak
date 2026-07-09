@@ -52,11 +52,7 @@
 {#snippet statGrid(portrait = false)}
   <div class="stat-grid" class:pt-stat-grid={portrait}>
     {#each statItems as item (item.label)}
-      <div
-        class="stat-card"
-        class:pt-stat-card={portrait}
-        style="--accent: {item.accent};"
-      >
+      <div class="stat-card" class:pt-stat-card={portrait} style="--accent: {item.accent};">
         <span class="stat-label" class:pt-stat-label={portrait}>{item.label}</span>
         <span class="stat-value" class:pt-stat-value={portrait} style="color: {item.accent};">
           {formatNumber(item.value)}
@@ -232,7 +228,7 @@
     overflow: hidden;
     background: var(--base);
     color: var(--text);
-    font-family: "DM Mono", "JetBrains Mono", monospace;
+    font-family: 'DM Mono', 'JetBrains Mono', monospace;
     box-sizing: border-box;
   }
 
@@ -305,7 +301,7 @@
 
   .display-name {
     font-size: calc(var(--scale-unit) * 2.6);
-    font-family: "Instrument Serif", serif;
+    font-family: 'Instrument Serif', serif;
     font-weight: 500;
     line-height: 1;
     margin: 0;
@@ -338,11 +334,7 @@
 
   .divider {
     height: 1px;
-    background: linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.1),
-      transparent
-    );
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.1), transparent);
   }
 
   .follow-row {
@@ -368,7 +360,7 @@
 
   .follow-value {
     font-size: calc(var(--scale-unit) * 2.2);
-    font-family: "Instrument Serif", serif;
+    font-family: 'Instrument Serif', serif;
     font-weight: 500;
     line-height: 1;
     color: var(--text);
@@ -390,7 +382,7 @@
 
   .brand-name {
     font-size: calc(var(--scale-unit) * 1.8);
-    font-family: "Instrument Serif", serif;
+    font-family: 'Instrument Serif', serif;
     font-style: italic;
     background: linear-gradient(135deg, var(--iris) 0%, var(--foam) 50%, var(--rose) 100%);
     -webkit-background-clip: text;
@@ -418,8 +410,7 @@
     display: flex;
     flex-direction: column;
     gap: calc(var(--scale-unit) * 0.6);
-    box-shadow:
-      0 calc(var(--scale-unit) * 1) calc(var(--scale-unit) * 3) rgba(0, 0, 0, 0.45);
+    box-shadow: 0 calc(var(--scale-unit) * 1) calc(var(--scale-unit) * 3) rgba(0, 0, 0, 0.45);
   }
 
   .stat-label {
@@ -432,7 +423,7 @@
 
   .stat-value {
     font-size: calc(var(--scale-unit) * 2.8);
-    font-family: "Instrument Serif", serif;
+    font-family: 'Instrument Serif', serif;
     font-weight: 500;
     line-height: 1;
   }
@@ -442,8 +433,7 @@
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: calc(var(--scale-unit) * 1.8);
     padding: calc(var(--scale-unit) * 2) calc(var(--scale-unit) * 2.5);
-    box-shadow:
-      0 calc(var(--scale-unit) * 1.5) calc(var(--scale-unit) * 4) rgba(0, 0, 0, 0.5);
+    box-shadow: 0 calc(var(--scale-unit) * 1.5) calc(var(--scale-unit) * 4) rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: center;
     gap: calc(var(--scale-unit) * 2.5);
@@ -511,7 +501,7 @@
     font-size: calc(var(--scale-unit) * 0.9);
     flex-shrink: 0;
     font-weight: 600;
-    font-family: "DM Mono", monospace;
+    font-family: 'DM Mono', monospace;
     opacity: 0.7;
   }
 
@@ -537,7 +527,7 @@
 
   .repo-name {
     font-size: calc(var(--scale-unit) * 1.3);
-    font-family: "Instrument Serif", serif;
+    font-family: 'Instrument Serif', serif;
     color: var(--text);
     margin: 0;
     overflow: hidden;
@@ -549,7 +539,7 @@
   .repo-stars {
     font-size: calc(var(--scale-unit) * 1.15);
     color: var(--gold);
-    font-family: "DM Mono", monospace;
+    font-family: 'DM Mono', monospace;
     font-weight: 500;
   }
 
@@ -597,7 +587,7 @@
 
   .pt-display-name {
     font-size: calc(var(--scale-unit) * 5);
-    font-family: "Instrument Serif", serif;
+    font-family: 'Instrument Serif', serif;
     margin: 0 0 calc(var(--scale-unit) * 0.8);
     line-height: 1;
     color: var(--text);
@@ -712,7 +702,7 @@
     color: var(--gold);
     flex-shrink: 0;
     padding-left: calc(var(--scale-unit) * 2);
-    font-family: "Instrument Serif", serif;
+    font-family: 'Instrument Serif', serif;
     font-weight: 500;
   }
 

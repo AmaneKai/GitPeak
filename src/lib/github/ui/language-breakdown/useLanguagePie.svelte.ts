@@ -15,22 +15,27 @@ export function getDimensions(isMobileDevice: boolean) {
   const sizePixels = isMobileDevice ? 160 : 200
   const outerRadiusPixels = isMobileDevice ? 75 : 90
   const innerRadiusPixels = isMobileDevice ? 48 : 57
-  
-  return { 
-    sizePixels, 
-    centerX: sizePixels / 2, 
-    centerY: sizePixels / 2, 
-    outerRadiusPixels, 
-    innerRadiusPixels 
+
+  return {
+    sizePixels,
+    centerX: sizePixels / 2,
+    centerY: sizePixels / 2,
+    outerRadiusPixels,
+    innerRadiusPixels,
   }
 }
 
-export function polarToCoordinates(centerX: number, centerY: number, radius: number, degrees: number) {
+export function polarToCoordinates(
+  centerX: number,
+  centerY: number,
+  radius: number,
+  degrees: number,
+) {
   const radians = (degrees * Math.PI) / 180
-  
-  return { 
-    positionX: centerX + radius * Math.cos(radians), 
-    positionY: centerY + radius * Math.sin(radians) 
+
+  return {
+    positionX: centerX + radius * Math.cos(radians),
+    positionY: centerY + radius * Math.sin(radians),
   }
 }
 
@@ -63,33 +68,32 @@ export function generateArcPath(
 
 export function calculateSegmentOffset(slice: PieSlice): { offsetX: number; offsetY: number } {
   const radians = (slice.midAngleDegrees * Math.PI) / 180
-  
-  return { 
-    offsetX: Math.cos(radians) * PUSH_PIXELS, 
-    offsetY: Math.sin(radians) * PUSH_PIXELS 
+
+  return {
+    offsetX: Math.cos(radians) * PUSH_PIXELS,
+    offsetY: Math.sin(radians) * PUSH_PIXELS,
   }
 }
 
 export function buildPieSlices(languages: GitHubLanguage[]): PieSlice[] {
-  if (!languages?.length)
-    return []
-    
+  if (!languages?.length) return []
+
   let cursorDegrees = -90
-  
+
   return languages.map((language, index) => {
     const spanDegrees = (language.percentage / 100) * 360
     const startAngleDegrees = cursorDegrees + GAP_DEGREES / 2
     const endAngleDegrees = cursorDegrees + spanDegrees - GAP_DEGREES / 2
     const midAngleDegrees = cursorDegrees + spanDegrees / 2
-    
+
     cursorDegrees += spanDegrees
-    
-    return { 
-      ...language, 
-      color: pickAccentColor(index), 
-      startAngleDegrees, 
-      endAngleDegrees, 
-      midAngleDegrees 
+
+    return {
+      ...language,
+      color: pickAccentColor(index),
+      startAngleDegrees,
+      endAngleDegrees,
+      midAngleDegrees,
     }
   })
 }
@@ -110,33 +114,42 @@ export function useLanguagePie(getLanguages: () => GitHubLanguage[]) {
     function animationTick(currentTime: number) {
       const progressTime = Math.min((currentTime - startTime) / animationDurationMs, 1)
       const easedProgress = 1 - Math.pow(1 - progressTime, 3)
-      
+
       sweepDegrees = -90 + easedProgress * 360
-      
-      if (progressTime < 1)
-        animationFrameId = requestAnimationFrame(animationTick)
+
+      if (progressTime < 1) animationFrameId = requestAnimationFrame(animationTick)
     }
 
     animationFrameId = requestAnimationFrame(animationTick)
-    
+
     return () => cancelAnimationFrame(animationFrameId)
   })
 
   const animatedSlices = $derived(
     slices
       .filter((slice) => sweepDegrees > slice.startAngleDegrees)
-      .map((slice) => ({ 
-        ...slice, 
-        endAngleDegrees: Math.min(slice.endAngleDegrees, sweepDegrees) 
-      }))
+      .map((slice) => ({
+        ...slice,
+        endAngleDegrees: Math.min(slice.endAngleDegrees, sweepDegrees),
+      })),
   )
 
   return {
     dimensions,
-    get hoveredIndex() { return hoveredIndex },
-    get slices() { return slices },
-    get animatedSlices() { return animatedSlices },
-    onEnter(index: number) { hoveredIndex = index },
-    onLeave() { hoveredIndex = null },
+    get hoveredIndex() {
+      return hoveredIndex
+    },
+    get slices() {
+      return slices
+    },
+    get animatedSlices() {
+      return animatedSlices
+    },
+    onEnter(index: number) {
+      hoveredIndex = index
+    },
+    onLeave() {
+      hoveredIndex = null
+    },
   }
 }

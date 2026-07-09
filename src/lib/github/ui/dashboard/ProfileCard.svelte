@@ -66,7 +66,7 @@
           class={cn(
             'bg-[color-mix(in_srgb,var(--foam)_10%,transparent)]',
             'border-[color-mix(in_srgb,var(--foam)_20%,transparent)]',
-            'flex shrink-0 items-center gap-1 px-2 py-1 text---foam)',
+            'text---foam) flex shrink-0 items-center gap-1 px-2 py-1',
             'font-mono text-[10px]',
           )}
         >

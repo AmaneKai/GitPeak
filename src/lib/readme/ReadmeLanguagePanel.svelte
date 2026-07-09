@@ -79,9 +79,7 @@
   const dividerY = $derived(topRepoY - DIVIDER_GAP)
 
   function truncateName(name: string): string {
-    return name.length > NAME_MAX_CHARACTERS
-      ? `${name.slice(0, NAME_MAX_CHARACTERS - 1)}…`
-      : name
+    return name.length > NAME_MAX_CHARACTERS ? `${name.slice(0, NAME_MAX_CHARACTERS - 1)}…` : name
   }
 </script>
 

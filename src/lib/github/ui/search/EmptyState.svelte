@@ -2,23 +2,21 @@
   import { UserX, AlertCircle, WifiOff } from 'lucide-svelte'
   import { cn } from '$lib/ui/styling/class-merger'
 
-  let { 
-    username, 
-    error 
-  }: { 
-    username: string, 
-    error?: string | null 
+  let {
+    username,
+    error,
+  }: {
+    username: string
+    error?: string | null
   } = $props()
 
-  const isNetworkError = $derived(error?.toLowerCase().includes('network') || error?.toLowerCase().includes('connection'))
+  const isNetworkError = $derived(
+    error?.toLowerCase().includes('network') || error?.toLowerCase().includes('connection'),
+  )
   const isNotFound = $derived(!error || error.toLowerCase().includes('not found'))
-  
+
   const title = $derived(
-    isNotFound 
-      ? 'User not found' 
-      : isNetworkError 
-        ? 'Connection failed' 
-        : 'Something went wrong'
+    isNotFound ? 'User not found' : isNetworkError ? 'Connection failed' : 'Something went wrong',
   )
 </script>
 
@@ -44,7 +42,7 @@
   </div>
   <div>
     <h3 class="text-rp-text mb-1 text-lg font-medium">{title}</h3>
-    
+
     {#if isNotFound}
       <p class="text-subtle font-mono text-sm leading-relaxed">
         No GitHub profile for

@@ -18,8 +18,7 @@
     const shouldTriggerSearch =
       usernameFromUrl && usernameFromUrl !== searchManager.currentUsername && !searchManager.loading
 
-    if (!shouldTriggerSearch) 
-      return
+    if (!shouldTriggerSearch) return
 
     searchManager.onSearch(usernameFromUrl)
   })

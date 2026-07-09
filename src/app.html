@@ -11,13 +11,19 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap" />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital,wght@0,400;1,400&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital,wght@0,400;1,400&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap"
+    />
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <meta property="og:site_name" content="gitpeak" />
-    
+
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -26,32 +32,32 @@
         "url": "https://gitpeak.vercel.app/"
       }
     </script>
-    
+
     <title>gitpeak</title>
-    
+
     <script>
       try {
-        const savedThemeName = localStorage.getItem("gitpeak-theme");
-        
-        if (savedThemeName === "custom") {
-          const rawThemeTokens = localStorage.getItem("gitpeak-theme-tokens");
-          
+        const savedThemeName = localStorage.getItem('gitpeak-theme')
+
+        if (savedThemeName === 'custom') {
+          const rawThemeTokens = localStorage.getItem('gitpeak-theme-tokens')
+
           if (rawThemeTokens) {
-            const parsedThemeTokens = JSON.parse(rawThemeTokens);
-            const rootElement = document.documentElement;
-            
+            const parsedThemeTokens = JSON.parse(rawThemeTokens)
+            const rootElement = document.documentElement
+
             for (const tokenKey in parsedThemeTokens) {
-              rootElement.style.setProperty("--" + tokenKey, parsedThemeTokens[tokenKey]);
+              rootElement.style.setProperty('--' + tokenKey, parsedThemeTokens[tokenKey])
             }
           }
         } else if (savedThemeName) {
-          document.documentElement.setAttribute("data-theme", savedThemeName);
+          document.documentElement.setAttribute('data-theme', savedThemeName)
         }
       } catch (error) {
-        console.warn("failed to restore gitpeak theme from local storage", error);
+        console.warn('failed to restore gitpeak theme from local storage', error)
       }
     </script>
-    
+
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">

@@ -46,7 +46,7 @@
   <g class="anim-card" style="animation-delay:{0.1 + index * 0.08}s">
     <rect
       x={cardX}
-      y={y}
+      {y}
       width={heroWidth}
       height={HERO_HEIGHT}
       rx="16"

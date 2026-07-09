@@ -11,8 +11,5 @@
     "strict": true,
     "types": ["bun"]
   },
-  "exclude": [
-    "./.svelte-kit/**",
-    "node_modules/**"
-  ]
+  "exclude": ["./.svelte-kit/**", "node_modules/**"]
 }

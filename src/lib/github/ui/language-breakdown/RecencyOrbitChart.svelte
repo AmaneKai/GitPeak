@@ -79,8 +79,7 @@
       onclick={() => window.open(node.url, '_blank')}
       onkeydown={(event) => {
         const isTrigger = event.key === 'Enter' || event.key === ' '
-        if (!isTrigger) 
-return
+        if (!isTrigger) return
         window.open(node.url, '_blank')
       }}
     >

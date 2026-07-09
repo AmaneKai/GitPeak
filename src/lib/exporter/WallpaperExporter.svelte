@@ -55,14 +55,12 @@
   // Avatar → base64 to avoid canvas CORS taint during html-to-image export
   $effect(() => {
     const avatarUrl = stats.avatarUrl
-    if (!avatarUrl) 
-return
+    if (!avatarUrl) return
 
     avatarSource = avatarUrl // show remote URL immediately while fetching
     fetch(avatarUrl)
       .then((res) => {
-        if (!res.ok) 
-throw new Error(`${res.status}`)
+        if (!res.ok) throw new Error(`${res.status}`)
         return res.blob()
       })
       .then(
@@ -92,8 +90,7 @@ throw new Error(`${res.status}`)
   })
 
   async function generateWallpaper(): Promise<void> {
-    if (!exportNode || isGenerating) 
-return
+    if (!exportNode || isGenerating) return
     isGenerating = true
 
     try {
@@ -134,7 +131,7 @@ return
 </script>
 
 {#snippet formatList(fullWidth = false)}
-  {#each WALLPAPER_FORMATS as format}
+  {#each WALLPAPER_FORMATS as format (format.id)}
     <button
       class="format-button"
       class:format-button--full={fullWidth}
@@ -325,7 +322,7 @@ return
 
   .eyebrow {
     font-size: 10px;
-    font-family: "DM Mono", monospace;
+    font-family: 'DM Mono', monospace;
     text-transform: uppercase;
     letter-spacing: 0.18em;
     color: var(--subtle);
@@ -333,7 +330,7 @@ return
 
   .section-label {
     font-size: 9px;
-    font-family: "DM Mono", monospace;
+    font-family: 'DM Mono', monospace;
     text-transform: uppercase;
     letter-spacing: 0.18em;
     color: var(--muted);
@@ -342,7 +339,7 @@ return
 
   .dim-label {
     font-size: 9px;
-    font-family: "DM Mono", monospace;
+    font-family: 'DM Mono', monospace;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     color: var(--muted);
@@ -368,7 +365,7 @@ return
     padding: 7px 12px;
     border-radius: 10px;
     cursor: pointer;
-    font-family: "DM Mono", monospace;
+    font-family: 'DM Mono', monospace;
     font-size: 11px;
     white-space: nowrap;
     flex-shrink: 0;
@@ -410,7 +407,7 @@ return
     border-radius: 50px;
     border: none;
     cursor: pointer;
-    font-family: "DM Mono", monospace;
+    font-family: 'DM Mono', monospace;
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.08em;

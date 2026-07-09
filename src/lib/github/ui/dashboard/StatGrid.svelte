@@ -13,8 +13,7 @@
   let isTouchDevice = $state(false)
 
   $effect(() => {
-    if (typeof window === 'undefined') 
-      return
+    if (typeof window === 'undefined') return
 
     isTouchDevice = window.matchMedia('(pointer: coarse)').matches
   })

@@ -20,15 +20,13 @@ function getErrorMessage(status: number): string {
     [SERVICE_UNAVAILABLE]: 'Service is unavailable, try again shortly',
   }
 
-  if (status >= INTERNAL_SERVER_ERROR)
-    return 'Something went wrong on our end, try again shortly'
+  if (status >= INTERNAL_SERVER_ERROR) return 'Something went wrong on our end, try again shortly'
 
   return messages[status] ?? 'Unexpected error, please try again'
 }
 
 function keysToCamel(item: unknown): unknown {
-  if (Array.isArray(item))
-    return item.map((value) => keysToCamel(value))
+  if (Array.isArray(item)) return item.map((value) => keysToCamel(value))
 
   if (item !== null && typeof item === 'object') {
     const record = item as Record<string, unknown>
@@ -59,24 +57,20 @@ export function createGithubClient(config: GithubClientConfig) {
         const response = await fetch(url, { signal: controller.signal })
         clearTimeout(timeoutId)
 
-        if (!response.ok)
-          return error(getErrorMessage(response.status))
+        if (!response.ok) return error(getErrorMessage(response.status))
 
         const rawResponse = await response.json()
-        if (!rawResponse.ok)
-          return error('Could not load this profile — try again')
+        if (!rawResponse.ok) return error('Could not load this profile — try again')
 
         const parsedStats = githubStatsSchema.safeParse(keysToCamel(rawResponse.data))
-        if (!parsedStats.success)
-          return error('Received an unexpected response — try again')
+        if (!parsedStats.success) return error('Received an unexpected response — try again')
 
         return ok(parsedStats.data)
       } catch (caughtError: unknown) {
         clearTimeout(timeoutId)
 
         if (caughtError instanceof Error) {
-          if (caughtError.name === 'AbortError')
-            return error('Request timed out')
+          if (caughtError.name === 'AbortError') return error('Request timed out')
           return error(caughtError.message)
         }
 

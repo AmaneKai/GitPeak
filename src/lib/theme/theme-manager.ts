@@ -16,7 +16,7 @@ export const PRESET_THEMES: Record<string, ThemeTokens> = {
     iris: '#c4a7e7',
     'highlight-low': '#21202e',
     'highlight-med': '#403d52',
-    'highlight-high': '#524f67'
+    'highlight-high': '#524f67',
   },
   'Rosé Pine Moon': {
     base: '#232136',
@@ -33,7 +33,7 @@ export const PRESET_THEMES: Record<string, ThemeTokens> = {
     iris: '#c4a7e7',
     'highlight-low': '#2a283e',
     'highlight-med': '#44415a',
-    'highlight-high': '#56526e'
+    'highlight-high': '#56526e',
   },
   'Rosé Pine Dawn': {
     base: '#faf4ed',
@@ -50,7 +50,7 @@ export const PRESET_THEMES: Record<string, ThemeTokens> = {
     iris: '#907aa9',
     'highlight-low': '#f4ede8',
     'highlight-med': '#dfdad9',
-    'highlight-high': '#cecacd'
+    'highlight-high': '#cecacd',
   },
   'Catppuccin Mocha': {
     base: '#1e1e2e',
@@ -67,7 +67,7 @@ export const PRESET_THEMES: Record<string, ThemeTokens> = {
     iris: '#cba6f7',
     'highlight-low': '#1e1e2e',
     'highlight-med': '#313244',
-    'highlight-high': '#45475a'
+    'highlight-high': '#45475a',
   },
   'Catppuccin Latte': {
     base: '#eff1f5',
@@ -84,7 +84,7 @@ export const PRESET_THEMES: Record<string, ThemeTokens> = {
     iris: '#8839ef',
     'highlight-low': '#ccd0da',
     'highlight-med': '#bcc0cc',
-    'highlight-high': '#acb0be'
+    'highlight-high': '#acb0be',
   },
   'Tokyo Night': {
     base: '#1a1b26',
@@ -101,7 +101,7 @@ export const PRESET_THEMES: Record<string, ThemeTokens> = {
     iris: '#bb9af7',
     'highlight-low': '#1a1b26',
     'highlight-med': '#2f3549',
-    'highlight-high': '#3b4261'
+    'highlight-high': '#3b4261',
   },
   'Gruvbox Dark': {
     base: '#282828',
@@ -118,9 +118,9 @@ export const PRESET_THEMES: Record<string, ThemeTokens> = {
     iris: '#d3869b',
     'highlight-low': '#282828',
     'highlight-med': '#3c3836',
-    'highlight-high': '#504945'
+    'highlight-high': '#504945',
   },
-  'Nord': {
+  Nord: {
     base: '#2e3440',
     surface: '#3b4252',
     overlay: '#434c5e',
@@ -135,8 +135,8 @@ export const PRESET_THEMES: Record<string, ThemeTokens> = {
     iris: '#81a1c1',
     'highlight-low': '#2e3440',
     'highlight-med': '#434c5e;',
-    'highlight-high': '#4c566a'
-  }
+    'highlight-high': '#4c566a',
+  },
 }
 
 export const TOKEN_LABELS: Record<string, string> = {
@@ -154,7 +154,7 @@ export const TOKEN_LABELS: Record<string, string> = {
   iris: 'Iris',
   'highlight-low': 'Highlight Low',
   'highlight-med': 'Highlight Med',
-  'highlight-high': 'Highlight High'
+  'highlight-high': 'Highlight High',
 }
 
 export const ACCENT_COLORS = [
@@ -163,7 +163,7 @@ export const ACCENT_COLORS = [
   'var(--rose)',
   'var(--pine)',
   'var(--foam)',
-  'var(--iris)'
+  'var(--iris)',
 ]
 
 export const COLORS = ACCENT_COLORS
@@ -176,8 +176,7 @@ const STORAGE_KEY = 'gitpeak-theme'
 const CUSTOM_TOKENS_KEY = 'gitpeak-theme-tokens'
 
 export function initTheme(): void {
-  if (typeof window === 'undefined')
-    return
+  if (typeof window === 'undefined') return
 
   const savedTheme = localStorage.getItem(STORAGE_KEY)
   if (!savedTheme) return
@@ -198,20 +197,18 @@ export function initTheme(): void {
 }
 
 export function setTheme(themeName: string): void {
-  if (typeof window === 'undefined')
-    return
+  if (typeof window === 'undefined') return
 
   localStorage.setItem(STORAGE_KEY, themeName)
   localStorage.removeItem(CUSTOM_TOKENS_KEY)
   document.documentElement.setAttribute('data-theme', themeName)
-  
+
   // Clear any inline styles that might be overriding the data-theme
   document.documentElement.removeAttribute('style')
 }
 
 export function saveCustomTokens(tokens: ThemeTokens): void {
-  if (typeof window === 'undefined')
-    return
+  if (typeof window === 'undefined') return
 
   localStorage.setItem(STORAGE_KEY, 'custom')
   localStorage.setItem(CUSTOM_TOKENS_KEY, JSON.stringify(tokens))
@@ -220,23 +217,19 @@ export function saveCustomTokens(tokens: ThemeTokens): void {
 
 export function getTokens(): ThemeTokens {
   const tokens: ThemeTokens = {}
-  for (const key of Object.keys(TOKEN_LABELS)) {
-    tokens[key] = getComputedStyle(document.documentElement)
-      .getPropertyValue(`--${key}`)
-      .trim()
-  }
+  for (const key of Object.keys(TOKEN_LABELS))
+    tokens[key] = getComputedStyle(document.documentElement).getPropertyValue(`--${key}`).trim()
+
   return tokens
 }
 
 export function applyTokens(tokens: ThemeTokens): void {
-  for (const [key, value] of Object.entries(tokens)) 
+  for (const [key, value] of Object.entries(tokens))
     document.documentElement.style.setProperty(`--${key}`, value)
-  
 }
 
 export function getSavedPresetName(): string | null {
-  if (typeof window === 'undefined')
-    return null
+  if (typeof window === 'undefined') return null
   const name = localStorage.getItem(STORAGE_KEY)
   return name === 'custom' ? null : name
 }
@@ -244,21 +237,17 @@ export function getSavedPresetName(): string | null {
 export function applyPreset(themeName: string): void {
   setTheme(themeName)
   const tokens = PRESET_THEMES[themeName]
-  if (tokens) 
-    applyTokens(tokens)
-  
+  if (tokens) applyTokens(tokens)
 }
 
 export function parseThemeFromCSS(cssText: string): ThemeTokens {
   const tokens: ThemeTokens = {}
   const matches = cssText.matchAll(/--([\w-]+):\s*([^;]+);/g)
-  
+
   for (const match of matches) {
     const key = match[1].trim()
-    if (TOKEN_LABELS[key]) 
-      tokens[key] = match[2].trim()
-    
+    if (TOKEN_LABELS[key]) tokens[key] = match[2].trim()
   }
-  
+
   return tokens
 }

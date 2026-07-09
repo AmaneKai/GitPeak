@@ -45,7 +45,7 @@
     fill-opacity="0.06"
   />
 {/if}
-<rect x={x} y={y} width="5" height={height} rx="2.5" fill={theme.gold} />
+<rect {x} {y} width="5" {height} rx="2.5" fill={theme.gold} />
 <text x={x + 24} y={y + 26} class="text-subtle">★ Top Repository</text>
 <text x={x + 24} y={y + 52} class="text-serif" font-size="22">{repository.name}</text>
 <text

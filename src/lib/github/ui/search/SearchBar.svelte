@@ -11,13 +11,11 @@
 
   function handleSearch() {
     const trimmed = username.trim()
-    if (trimmed) 
-onSearch(trimmed)
+    if (trimmed) onSearch(trimmed)
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter') 
-handleSearch()
+    if (e.key === 'Enter') handleSearch()
   }
 </script>
 

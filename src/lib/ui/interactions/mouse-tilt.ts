@@ -8,13 +8,13 @@ export function applyTilt(event: MouseEvent, element: HTMLElement): TiltState {
   const boundaryRect = element.getBoundingClientRect()
   const positionX = event.clientX - boundaryRect.left
   const positionY = event.clientY - boundaryRect.top
-  
+
   const midPointX = boundaryRect.width / 2
   const midPointY = boundaryRect.height / 2
-  
+
   const tiltMultiplierX = 8
   const tiltMultiplierY = 8
-  
+
   const rotateY = ((positionX - midPointX) / midPointX) * tiltMultiplierX
   const rotateX = ((midPointY - positionY) / midPointY) * tiltMultiplierY
 
@@ -26,23 +26,21 @@ export function neutralTilt(): TiltState {
 }
 
 export function tiltStyle(state: TiltState): string {
-  if (!state.active)
-    return 'transform: perspective(1000px) rotateX(0deg) rotateY(0deg)'
+  if (!state.active) return 'transform: perspective(1000px) rotateX(0deg) rotateY(0deg)'
 
   return `transform: perspective(1000px) rotateX(${state.rotateX}deg) rotateY(${state.rotateY}deg)`
 }
 
 export function shineStyle(state: TiltState): string {
-  if (!state.active)
-    return 'opacity: 0'
+  if (!state.active) return 'opacity: 0'
 
   const angleRadians = Math.atan2(state.rotateX, state.rotateY)
   const angleDegrees = (angleRadians * 180) / Math.PI + 90
-  
+
   return [
     `background: linear-gradient(${angleDegrees}deg, `,
     'rgba(255, 255, 255, 0.12) 0%, ',
     'transparent 80%); ',
-    'opacity: 1;'
+    'opacity: 1;',
   ].join('')
 }

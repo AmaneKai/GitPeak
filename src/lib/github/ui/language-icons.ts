@@ -60,6 +60,5 @@ export function hideImgOnError(e: Event): void {
   const img = e.currentTarget as HTMLImageElement
   img.style.display = 'none'
   const fallback = img.nextElementSibling as HTMLElement | null
-  if (fallback) 
-    fallback.style.display = 'block'
+  if (fallback) fallback.style.display = 'block'
 }

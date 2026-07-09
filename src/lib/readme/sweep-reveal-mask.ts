@@ -64,8 +64,8 @@ export function buildSweepRevealMask(
   const dValues: string[] = []
   const keyTimeValues: string[] = []
 
-  for (let i = 0; i < steps; i += 1) {
-    const linearProgress = i / (steps - 1)
+  for (let index = 0; index < steps; index += 1) {
+    const linearProgress = index / (steps - 1)
     const easedProgress = easeOutCubic(linearProgress)
     const endAngle = SWEEP_START_ANGLE_DEGREES + easedProgress * SWEEP_SPAN_DEGREES
     dValues.push(sectorPath(centerX, centerY, radius, SWEEP_START_ANGLE_DEGREES, endAngle))

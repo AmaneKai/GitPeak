@@ -89,9 +89,7 @@
               {slice.name}
             </span>
 
-            <div
-              class={cn('bg-subtle/10 h-0.75 w-15', 'shrink-0 overflow-hidden rounded-full')}
-            >
+            <div class={cn('bg-subtle/10 h-0.75 w-15', 'shrink-0 overflow-hidden rounded-full')}>
               <div
                 class="bar-grow h-full rounded-full"
                 style={`

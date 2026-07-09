@@ -12,23 +12,20 @@ export interface OrbitNode extends InvolvedRepo {
 }
 
 function getLanguageColor(
-  languageName: string | null | undefined, 
-  allLanguages: GitHubLanguage[]
+  languageName: string | null | undefined,
+  allLanguages: GitHubLanguage[],
 ): string {
-  if (!languageName)
-    return 'var(--iris)'
+  if (!languageName) return 'var(--iris)'
 
   const languageIndex = allLanguages.findIndex(
-    (language) => language.name.toLowerCase() === languageName.toLowerCase()
+    (language) => language.name.toLowerCase() === languageName.toLowerCase(),
   )
-  
-  if (languageIndex !== -1)
-    return pickAccentColor(languageIndex)
+
+  if (languageIndex !== -1) return pickAccentColor(languageIndex)
 
   let stringHash = 0
-  for (let index = 0; index < languageName.length; index++) 
+  for (let index = 0; index < languageName.length; index++)
     stringHash = languageName.charCodeAt(index) + ((stringHash << 5) - stringHash)
-  
 
   return pickAccentColor(Math.abs(stringHash))
 }
@@ -39,10 +36,9 @@ export function calculateOrbitNodes(
   centerX: number,
   centerY: number,
   innerRadius: number,
-  outerRadius: number
+  outerRadius: number,
 ): OrbitNode[] {
-  if (repositories.length === 0)
-    return []
+  if (repositories.length === 0) return []
 
   const parsedRepositories = repositories
     .map((repository) => ({
@@ -60,7 +56,7 @@ export function calculateOrbitNodes(
   const minOrbitRadius = innerRadius + 10
   const maxOrbitRadius = outerRadius + 12
   const repositoryCount = parsedRepositories.length
-  
+
   const coreSizePixels = Math.max(1.8, Math.min(3.5, 24 / repositoryCount))
   const haloSizePixels = coreSizePixels * 2
 
@@ -75,15 +71,13 @@ export function calculateOrbitNodes(
     const positionY = centerY + orbitRadius * Math.sin(angleRadians)
 
     const ageInDays = Math.max(
-      0, 
-      Math.floor((currentTimeMs - repository.timestampMs) / (1000 * 60 * 60 * 24))
+      0,
+      Math.floor((currentTimeMs - repository.timestampMs) / (1000 * 60 * 60 * 24)),
     )
-    
+
     let relativeTimeLabel = `${ageInDays}d ago`
-    if (ageInDays === 0) 
-      relativeTimeLabel = 'today'
-    if (ageInDays === 1) 
-      relativeTimeLabel = 'yesterday'
+    if (ageInDays === 0) relativeTimeLabel = 'today'
+    if (ageInDays === 1) relativeTimeLabel = 'yesterday'
 
     return {
       ...repository,

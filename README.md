@@ -28,9 +28,9 @@ GitHub username:
 
 ```html
 <div align="center">
-	<a href="https://gitpeak.vercel.app/?username=YOUR_USERNAME">
-		<img src="https://gitpeak.vercel.app/api/readme?username=YOUR_USERNAME" alt="My GitHub Stats" />
-	</a>
+  <a href="https://gitpeak.vercel.app/?username=YOUR_USERNAME">
+    <img src="https://gitpeak.vercel.app/api/readme?username=YOUR_USERNAME" alt="My GitHub Stats" />
+  </a>
 </div>
 ```
 

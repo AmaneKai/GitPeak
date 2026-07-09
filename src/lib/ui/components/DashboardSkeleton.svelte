@@ -17,7 +17,7 @@
 
     <div class="flex flex-col gap-3">
       <div class="grid grid-cols-2 gap-3">
-        {#each [0, 1] as itemIndex}
+        {#each [0, 1] as itemIndex (itemIndex)}
           <div
             class="shimmer h-24 rounded-2xl [animation-delay:var(--delay)]"
             style="--delay: {(index + itemIndex) * 60}ms;"
@@ -26,7 +26,7 @@
       </div>
 
       <div class="grid grid-cols-3 gap-2 sm:gap-2.5">
-        {#each [0, 1, 2, 3, 4, 5] as itemIndex}
+        {#each [0, 1, 2, 3, 4, 5] as itemIndex (itemIndex)}
           <div
             class="shimmer h-20 rounded-[14px] [animation-delay:var(--delay)]"
             style="--delay: {(index + itemIndex) * 60}ms;"
@@ -52,7 +52,7 @@
             class="shimmer h-[160px] w-[160px] shrink-0 rounded-full sm:h-[200px] sm:w-[200px]"
           ></div>
           <div class="flex w-full flex-col gap-0.5">
-            {#each [0, 1, 2, 3, 4] as itemIndex}
+            {#each [0, 1, 2, 3, 4] as itemIndex (itemIndex)}
               <div
                 class="flex items-center gap-2 px-1.5 py-1 [animation-delay:var(--delay)]"
                 style="--delay: {(index + itemIndex) * 60}ms;"

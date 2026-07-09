@@ -1,25 +1,25 @@
 <script lang="ts">
-	import type { HTMLAttributes } from "svelte/elements"
-	import { cn, type WithElementRef } from "$lib/ui/styling/class-merger"
+  import type { HTMLAttributes } from 'svelte/elements'
+  import { cn, type WithElementRef } from '$lib/ui/styling/class-merger'
 
-	let {
-		ref = $bindable(null),
-		class: className,
-		children,
-		size = "default",
-		...restProps
-	}: WithElementRef<HTMLAttributes<HTMLDivElement>> & { size?: "default" | "sm" } = $props()
+  let {
+    ref = $bindable(null),
+    class: className,
+    children,
+    size = 'default',
+    ...restProps
+  }: WithElementRef<HTMLAttributes<HTMLDivElement>> & { size?: 'default' | 'sm' } = $props()
 </script>
 
 <div
-	bind:this={ref}
-	data-slot="card"
-	data-size={size}
-	class={cn(
-		"bg-card text-card-foreground ring-foreground/5 dark:ring-foreground/10 group/card flex flex-col gap-6 overflow-hidden rounded-4xl py-6 text-sm shadow-md ring-1 has-[>img:first-child]:pt-0 data-[size=sm]:gap-4 data-[size=sm]:py-4 *:[img:first-child]:rounded-t-4xl *:[img:last-child]:rounded-b-4xl",
-		className,
-	)}
-	{...restProps}
+  bind:this={ref}
+  data-slot="card"
+  data-size={size}
+  class={cn(
+    'bg-card text-card-foreground ring-foreground/5 dark:ring-foreground/10 group/card flex flex-col gap-6 overflow-hidden rounded-4xl py-6 text-sm shadow-md ring-1 has-[>img:first-child]:pt-0 data-[size=sm]:gap-4 data-[size=sm]:py-4 *:[img:first-child]:rounded-t-4xl *:[img:last-child]:rounded-b-4xl',
+    className,
+  )}
+  {...restProps}
 >
-	{@render children?.()}
+  {@render children?.()}
 </div>

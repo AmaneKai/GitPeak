@@ -71,14 +71,7 @@
   <circle {cx} {cy} r={ri - 1} fill="rgba(0,0,0,0.15)" />
 
   <!-- Subtle inner ring -->
-  <circle
-    {cx}
-    {cy}
-    r={ri - 1}
-    fill="none"
-    stroke-width="0.8"
-    stroke="rgba(255,255,255,0.06)"
-  />
+  <circle {cx} {cy} r={ri - 1} fill="none" stroke-width="0.8" stroke="rgba(255,255,255,0.06)" />
 
   <!-- Slice count -->
   <text

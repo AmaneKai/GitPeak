@@ -3,13 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 export async function fetchAsDataUri(url: string | null | undefined): Promise<string> {
-  if (!url)
-    return ''
+  if (!url) return ''
 
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(3000) })
-    if (!response.ok)
-      return ''
+    if (!response.ok) return ''
 
     const contentType = response.headers.get('content-type') || 'image/png'
     const buffer = await response.arrayBuffer()
@@ -25,7 +23,7 @@ async function fetchFontArrayBuffer(family: string, weight: number): Promise<Arr
   const userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_6_8)'
 
   try {
-    const css = await fetch(url, { headers: { 'User-Agent': userAgent } }).then(r => r.text())
+    const css = await fetch(url, { headers: { 'User-Agent': userAgent } }).then((r) => r.text())
     const match = css.match(/src: url\((.+?)\) format\('(opentype|truetype)'\)/)
 
     if (!match) {
@@ -34,8 +32,7 @@ async function fetchFontArrayBuffer(family: string, weight: number): Promise<Arr
     }
 
     const response = await fetch(match[1])
-    if (!response.ok)
-      return null
+    if (!response.ok) return null
 
     return await response.arrayBuffer()
   } catch (error) {
@@ -80,8 +77,7 @@ export function getOgFontFiles(): Promise<{ mono: string; serif: string; jp: str
 
     await Promise.all(
       entries.map(async ([key, buffer, filename]) => {
-        if (!buffer)
-          return
+        if (!buffer) return
         const filePath = join(tmpdir(), filename)
         await writeFile(filePath, Buffer.from(buffer))
         paths[key] = filePath

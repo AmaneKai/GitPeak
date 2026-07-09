@@ -24,7 +24,8 @@
   onMount(async () => {
     tokens = { ...getTokens() }
     const saved = getSavedPresetName()
-    activePreset = saved || (localStorage.getItem('gitpeak-theme') === 'custom' ? null : 'Rosé Pine')
+    activePreset =
+      saved || (localStorage.getItem('gitpeak-theme') === 'custom' ? null : 'Rosé Pine')
     await import('vanilla-colorful/hex-color-picker.js')
   })
 
@@ -47,8 +48,7 @@
 
   function importCSS(e: Event) {
     const file = (e.target as HTMLInputElement).files?.[0]
-    if (!file) 
-      return
+    if (!file) return
     const reader = new FileReader()
     reader.onload = () => {
       const css = reader.result as string
@@ -85,8 +85,7 @@
 
   function onPickerChange(e: Event, key: string) {
     const value = (e as CustomEvent).detail.value
-    if (value) 
-      update(key, value)
+    if (value) update(key, value)
   }
 </script>
 
@@ -96,7 +95,7 @@
   class={cn(
     'glass flex items-center gap-2 rounded-xl border px-3',
     'py-2 font-mono text-xs tracking-wide uppercase',
-    'transition-all duration-200'
+    'transition-all duration-200',
   )}
   style="
     color: var(--subtle);
@@ -106,10 +105,7 @@
 >
   <Palette size={14} />
   <span class="hidden sm:inline">theme</span>
-  <ChevronDown
-    size={12}
-    class="transition-transform duration-200 {open ? 'rotate-180' : ''}"
-  />
+  <ChevronDown size={12} class="transition-transform duration-200 {open ? 'rotate-180' : ''}" />
 </button>
 
 {#if open}
@@ -129,7 +125,7 @@
     class={cn(
       'fixed top-16 right-2 left-2 z-50 flex max-h-[80vh]',
       'flex-col overflow-hidden rounded-2xl sm:right-4',
-      'sm:left-auto sm:w-[320px]'
+      'sm:left-auto sm:w-[320px]',
     )}
     style="
       background: var(--overlay);
@@ -142,10 +138,7 @@
       style="border-bottom: 1px solid color-mix(in srgb,
         var(--highlight-med) 30%, transparent)"
     >
-      <span
-        class="font-mono text-xs tracking-widest uppercase"
-        style="color: var(--subtle)"
-      >
+      <span class="font-mono text-xs tracking-widest uppercase" style="color: var(--subtle)">
         Customize
       </span>
       <button
@@ -160,10 +153,7 @@
 
     <div class="flex flex-1 flex-col gap-5 overflow-y-auto p-4">
       <div>
-        <p
-          class="mb-2 font-mono text-[10px] tracking-widest uppercase"
-          style="color: var(--muted)"
-        >
+        <p class="mb-2 font-mono text-[10px] tracking-widest uppercase" style="color: var(--muted)">
           Presets
         </p>
         <div class="flex flex-wrap gap-1.5">
@@ -172,16 +162,16 @@
               onclick={() => applyPreset(name)}
               class={cn(
                 'rounded-lg border px-2.5 py-1 font-mono text-[10px]',
-                'transition-all duration-150'
+                'transition-all duration-150',
               )}
               style="
                 border-color: {activePreset === name
-                  ? 'color-mix(in srgb, var(--iris) 60%, transparent)'
-                  : 'color-mix(in srgb, var(--highlight-med) 50%, transparent)'};
+                ? 'color-mix(in srgb, var(--iris) 60%, transparent)'
+                : 'color-mix(in srgb, var(--highlight-med) 50%, transparent)'};
                 color: {activePreset === name ? 'var(--iris)' : 'var(--subtle)'};
                 background: {activePreset === name
-                  ? 'color-mix(in srgb, var(--iris) 10%, transparent)'
-                  : 'transparent'};
+                ? 'color-mix(in srgb, var(--iris) 10%, transparent)'
+                : 'transparent'};
               "
             >
               {name}
@@ -192,7 +182,7 @@
             class={cn(
               'flex cursor-pointer items-center gap-1 rounded-lg',
               'px-2.5 py-1 font-mono text-[10px] transition-all',
-              'duration-150'
+              'duration-150',
             )}
             style="
               border: 1px dashed color-mix(in srgb,
@@ -209,7 +199,7 @@
             class={cn(
               'flex cursor-pointer items-center gap-1 rounded-lg',
               'px-2.5 py-1 font-mono text-[10px] transition-all',
-              'duration-150'
+              'duration-150',
             )}
             style="
               border: 1px dashed color-mix(in srgb,
@@ -223,10 +213,7 @@
       </div>
 
       <div>
-        <p
-          class="mb-2 font-mono text-[10px] tracking-widest uppercase"
-          style="color: var(--muted)"
-        >
+        <p class="mb-2 font-mono text-[10px] tracking-widest uppercase" style="color: var(--muted)">
           Colors
         </p>
         <div class="grid grid-cols-1 gap-1">
@@ -243,12 +230,11 @@
                     value={tokens[key]}
                     onchange={(e) => {
                       const value = (e.target as HTMLInputElement).value.trim()
-                      if (/^#[0-9a-fA-F]{6}$/.test(value)) 
-                        update(key, value)
+                      if (/^#[0-9a-fA-F]{6}$/.test(value)) update(key, value)
                     }}
                     class={cn(
                       'w-20 rounded-lg px-2 py-1 text-right font-mono',
-                      'text-[10px] transition-all outline-none'
+                      'text-[10px] transition-all outline-none',
                     )}
                     style="
                       background: color-mix(in srgb, var(--overlay) 80%, transparent);
@@ -268,8 +254,8 @@
                       border: 1px solid color-mix(in srgb,
                         var(--highlight-high) 50%, transparent);
                       box-shadow: {activeKey === key
-                        ? '0 0 0 2px var(--iris)'
-                        : `0 0 0 2px color-mix(in srgb,
+                      ? '0 0 0 2px var(--iris)'
+                      : `0 0 0 2px color-mix(in srgb,
                            ${tokens[key]} 30%, transparent)`};
                     "
                   ></button>

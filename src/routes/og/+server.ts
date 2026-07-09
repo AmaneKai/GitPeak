@@ -9,8 +9,7 @@ import type { RequestHandler } from './$types'
 
 export const GET: RequestHandler = async (event) => {
   const username = event.url.searchParams.get('username')?.trim()
-  if (!username)
-    return new Response('Missing username', { status: 400 })
+  if (!username) return new Response('Missing username', { status: 400 })
 
   const requestedTheme = event.url.searchParams.get('theme') || 'Rosé Pine'
   const theme = PRESET_THEMES[requestedTheme] || PRESET_THEMES['Rosé Pine']
@@ -21,8 +20,7 @@ export const GET: RequestHandler = async (event) => {
   })
 
   const result = await client.fetchStats(username)
-  if (!result.ok)
-    return new Response('User not found', { status: 404 })
+  if (!result.ok) return new Response('User not found', { status: 404 })
 
   const statistics = result.value
   statistics.languages = Array.isArray(statistics.languages) ? statistics.languages : []
