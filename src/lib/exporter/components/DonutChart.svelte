@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { PieSlice } from '$lib/github/ui/language-breakdown/useLanguagePie.svelte.ts'
-  import { generateArcPath as arcPath } from '$lib/github/ui/language-breakdown/useLanguagePie.svelte.ts'
+  import type { PieSlice } from '$lib/github/ui/language-breakdown/useLanguagePie.svelte'
+  import { generateArcPath as arcPath } from '$lib/github/ui/language-breakdown/useLanguagePie.svelte'
 
   let {
     size,

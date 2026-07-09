@@ -2,7 +2,7 @@
   import type { GithubStats } from '$lib/github/models/github-stats'
   import { formatNumber } from '$lib/core/formatting/number-formatting'
   import { accountAge } from '$lib/github/models/account-age'
-  import { buildPieSlices as buildSlices } from '$lib/github/ui/language-breakdown/useLanguagePie.svelte.ts'
+  import { buildPieSlices as buildSlices } from '$lib/github/ui/language-breakdown/useLanguagePie.svelte'
   import { Users, Calendar } from 'lucide-svelte'
   import DotMatrixChart from '../components/DotMatrixChart.svelte'
 
