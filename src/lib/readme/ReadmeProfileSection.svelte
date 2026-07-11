@@ -3,6 +3,7 @@
   import type { ThemeTokens } from '$lib/theme/theme-manager'
   import { formatNumber } from '$lib/core/formatting/number-formatting'
   import { accountAge } from '$lib/github/models/account-age'
+  import { containsCjk } from '$lib/core/text/script-segments'
 
   let {
     statistics,
@@ -32,6 +33,7 @@
       ? `${displayName.slice(0, NAME_MAX_CHARACTERS - 1)}…`
       : displayName,
   )
+  const nameFontFamily = $derived(containsCjk(truncatedName) ? "'Noto Serif JP'" : undefined)
 
   const avatarX = $derived(x + 14)
   const avatarY = $derived(y + 16)
@@ -108,7 +110,13 @@
   {age}
 </text>
 
-<text x={textX} y={y + 40} class="text-serif" font-size="26">{truncatedName}</text>
+<text
+  x={textX}
+  y={y + 40}
+  class="text-serif"
+  font-size="26"
+  style={nameFontFamily ? `font-family:${nameFontFamily}` : undefined}>{truncatedName}</text
+>
 <text x={textX} y={y + 62} class="text-main" fill={theme.subtle} font-size="13">
   @{username}
 </text>

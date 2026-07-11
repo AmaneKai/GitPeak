@@ -3,7 +3,7 @@ import type { ThemeTokens } from '$lib/theme/theme-manager'
 function buildCardStyles(theme: ThemeTokens): string {
   return `
     .text-main { font-family: 'JetBrains Mono', 'Noto Sans JP', monospace; fill: ${theme.text}; }
-    .text-serif { font-family: 'Instrument Serif', 'Noto Sans JP', serif; fill: ${theme.text}; }
+    .text-serif { font-family: 'Instrument Serif', 'Noto Serif JP', serif; fill: ${theme.text}; }
     .text-subtle {
       font-family: 'JetBrains Mono', monospace;
       fill: ${theme.subtle};

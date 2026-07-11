@@ -1,48 +1,30 @@
 <script lang="ts">
-  import { toPng } from 'html-to-image'
   import { X, Download } from 'lucide-svelte'
-  import type { GithubStats } from '$lib/github/models/github-stats'
-  import WallpaperCanvas from './layouts/WallpaperCanvas.svelte'
+  import { WALLPAPER_FORMATS, type WallpaperFormat } from '$lib/wallpaper/wallpaper-formats'
+  import { getSavedPresetName } from '$lib/theme/theme-manager'
   import { Button } from '$lib/components/ui/button'
   import { toast } from 'svelte-sonner'
   import { cn } from '$lib/ui/styling/class-merger'
 
-  interface WallpaperFormat {
-    id: string
-    name: string
-    subtitle: string
-    width: number
-    height: number
-  }
-
   let {
-    stats,
     login,
     onClose,
   }: {
-    stats: GithubStats
     login: string
     onClose: () => void
   } = $props()
 
-  const WALLPAPER_FORMATS: WallpaperFormat[] = [
-    { id: 'desktop', name: 'Desktop', subtitle: '16:9', width: 1920, height: 1080 },
-    { id: 'mac', name: 'MacBook', subtitle: '16:10', width: 2560, height: 1600 },
-    { id: 'phone', name: 'Phone', subtitle: '9:16', width: 1080, height: 1920 },
-    { id: 'tall', name: 'Tall', subtitle: '9:21', width: 1080, height: 2520 },
-  ]
+  const themeName = getSavedPresetName() ?? 'Rosé Pine'
 
   let selectedFormat = $state<WallpaperFormat>(WALLPAPER_FORMATS[0])
   let isGenerating = $state(false)
-  let exportNode = $state<HTMLElement | null>(null)
+  let isPreviewLoading = $state(true)
   let isMobileDevice = $state(false)
-  let avatarSource = $state('')
   let previewWidthPixels = $state(700)
   let previewHeightPixels = $state(500)
 
   const paddingPixels = $derived(isMobileDevice ? 16 : 48)
 
-  // BUG FIX 1: guard against divide-by-zero before DOM bind fires
   const scaleMultiplier = $derived(
     selectedFormat.width > 0 && selectedFormat.height > 0
       ? Math.min(
@@ -52,33 +34,13 @@
       : 1,
   )
 
-  // Avatar → base64 to avoid canvas CORS taint during html-to-image export
-  $effect(() => {
-    const avatarUrl = stats.avatarUrl
-    if (!avatarUrl) return
-
-    avatarSource = avatarUrl // show remote URL immediately while fetching
-    fetch(avatarUrl)
-      .then((res) => {
-        if (!res.ok) throw new Error(`${res.status}`)
-        return res.blob()
-      })
-      .then(
-        (blob) =>
-          new Promise<string>((resolve, reject) => {
-            const reader = new FileReader()
-            reader.onload = () => resolve(reader.result as string)
-            reader.onerror = () => reject(new Error('FileReader failed'))
-            reader.readAsDataURL(blob)
-          }),
-      )
-      .then((dataUrl) => {
-        avatarSource = dataUrl
-      })
-      .catch(() => {
-        avatarSource = avatarUrl
-      })
-  })
+  // Rendered server-side (svelte/server + resvg) exactly like /og and /api/readme — the preview
+  // and the download are the same image, so they can never drift apart.
+  const wallpaperUrl = $derived(
+    `/wallpaper?username=${encodeURIComponent(login)}` +
+      `&format=${selectedFormat.id}` +
+      `&theme=${encodeURIComponent(themeName)}`,
+  )
 
   $effect(() => {
     const check = () => {
@@ -89,37 +51,29 @@
     return () => window.removeEventListener('resize', check)
   })
 
-  async function generateWallpaper(): Promise<void> {
-    if (!exportNode || isGenerating) return
+  $effect(() => {
+    void wallpaperUrl
+    isPreviewLoading = true
+  })
+
+  function handlePreviewLoaded(): void {
+    isPreviewLoading = false
+  }
+
+  function handlePreviewError(): void {
+    isPreviewLoading = false
+    toast.error('Preview failed to load. Check console for details.')
+  }
+
+  function generateWallpaper(): void {
+    if (isGenerating) return
     isGenerating = true
 
     try {
-      // Small delay so Svelte can flush any pending reactive updates
-      await new Promise<void>((resolve) => setTimeout(resolve, 150))
-
-      // BUG FIX 2: exportNode is inside a scaled-down preview container.
-      // We must temporarily remove the preview scale so html-to-image captures
-      // at the true full resolution (selectedFormat.width × selectedFormat.height).
-      // We do this by cloning + overriding, so the live preview is untouched.
-      const dataUrl = await toPng(exportNode, {
-        pixelRatio: 1, // 1:1 — the node is already the full target size
-        cacheBust: true,
-        width: selectedFormat.width,
-        height: selectedFormat.height,
-        style: {
-          transform: 'scale(1)',
-          transformOrigin: 'top left',
-          backdropFilter: 'none',
-          WebkitBackdropFilter: 'none',
-        } as Partial<CSSStyleDeclaration>,
-        skipFonts: false,
-      })
-
       const a = document.createElement('a')
-      a.href = dataUrl
+      a.href = wallpaperUrl
       a.download = `gitpeak-${login}-${selectedFormat.id}.png`
       a.click()
-
       toast.success('Wallpaper saved!')
     } catch (error) {
       console.error('Export failed:', error)
@@ -150,27 +104,19 @@
     style="width:{selectedFormat.width * scaleMultiplier}px; height:{selectedFormat.height *
       scaleMultiplier}px;"
   >
-    <div
-      style="
-        transform: scale({scaleMultiplier});
-        transform-origin: top left;
-        width: {selectedFormat.width}px;
-        height: {selectedFormat.height}px;
-      "
-    >
-      <div
-        bind:this={exportNode}
-        style="width:{selectedFormat.width}px; height:{selectedFormat.height}px;"
-      >
-        <WallpaperCanvas
-          statistics={stats}
-          username={login}
-          avatarSrc={avatarSource}
-          width={selectedFormat.width}
-          height={selectedFormat.height}
-        />
-      </div>
-    </div>
+    {#if isPreviewLoading}
+      <div class="preview-loading">Generating preview…</div>
+    {/if}
+    {#key wallpaperUrl}
+      <img
+        class="preview-image"
+        class:preview-image--loading={isPreviewLoading}
+        src={wallpaperUrl}
+        alt="{login}'s wallpaper preview"
+        onload={handlePreviewLoaded}
+        onerror={handlePreviewError}
+      />
+    {/key}
   </div>
 {/snippet}
 
@@ -449,6 +395,32 @@
     box-shadow:
       0 20px 60px -10px rgba(0, 0, 0, 0.6),
       0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+  }
+
+  .preview-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: opacity 0.15s ease;
+  }
+
+  .preview-image--loading {
+    opacity: 0;
+  }
+
+  .preview-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: color-mix(in srgb, var(--base) 60%, transparent);
   }
 
   .sidebar {

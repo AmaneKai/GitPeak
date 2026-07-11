@@ -3,15 +3,31 @@ import { dev } from '$app/environment'
 import { Resvg } from '@resvg/resvg-js'
 import { createGithubClient } from '$lib/github/api/github-client'
 import { PRESET_THEMES } from '$lib/theme/theme-manager'
-import OgCard from '$lib/readme/OgCard.svelte'
-import { buildOgStyles } from '$lib/readme/readme-font-styles'
-import { fetchAsDataUri, getOgFontFiles } from '$lib/readme/server-assets'
+import WallpaperCard from '$lib/wallpaper/WallpaperCard.svelte'
+import { buildWallpaperStyles } from '$lib/wallpaper/wallpaper-font-styles'
+import { fetchAsDataUri, getWallpaperFontFiles } from '$lib/readme/server-assets'
+import { getWallpaperFormat } from '$lib/wallpaper/wallpaper-formats'
 import { checkRateLimit } from '$lib/server/rate-limit'
 import type { RequestHandler } from './$types'
 
 export const GET: RequestHandler = async (event) => {
   const username = event.url.searchParams.get('username')?.trim()
   if (!username) return new Response('Missing username', { status: 400 })
+
+  const format = getWallpaperFormat(event.url.searchParams.get('format'))
+  if (!format) return new Response('Invalid format', { status: 400 })
+
+  // Optional: rasterize at a smaller pixel size for the live preview <img>, so the browser
+  // never has to bitmap-downscale a full-resolution PNG (which mangles thin serif strokes).
+  // The SVG is still laid out at the format's full width/height either way — only resvg's
+  // output raster size changes — so preview and download stay visually identical, just
+  // different pixel densities.
+  const requestedPreviewWidth = Number(event.url.searchParams.get('previewWidth'))
+  const rasterWidth =
+    Number.isFinite(requestedPreviewWidth) && requestedPreviewWidth > 0
+      ? Math.min(requestedPreviewWidth, format.width)
+      : format.width
+  const isPreview = rasterWidth !== format.width
 
   const rateLimit = await checkRateLimit(event.getClientAddress())
   if (!rateLimit.success) {
@@ -37,18 +53,34 @@ export const GET: RequestHandler = async (event) => {
   statistics.languages = Array.isArray(statistics.languages) ? statistics.languages : []
 
   const [fontFiles, avatarDataUri] = await Promise.all([
-    getOgFontFiles(),
+    getWallpaperFontFiles(),
     fetchAsDataUri(statistics.avatarUrl),
   ])
 
-  const { body } = render(OgCard, { props: { statistics, username, theme, avatarDataUri } })
-  const fontStyles = buildOgStyles(theme)
+  const { body } = render(WallpaperCard, {
+    props: {
+      statistics,
+      username,
+      theme,
+      avatarDataUri,
+      width: format.width,
+      height: format.height,
+    },
+  })
+  const fontStyles = buildWallpaperStyles(theme)
   const svg = body.replace('<defs>', `<defs><style>${fontStyles}</style>`)
 
   const resvg = new Resvg(svg, {
-    fitTo: { mode: 'width', value: 1200 },
+    fitTo: { mode: 'width', value: rasterWidth },
     font: {
-      fontFiles: [fontFiles.mono, fontFiles.serif, fontFiles.jp, fontFiles.serifJp].filter(Boolean),
+      fontFiles: [
+        fontFiles.mono,
+        fontFiles.bookSerif,
+        fontFiles.bookSerifBold,
+        fontFiles.jp,
+        fontFiles.serifJp,
+        fontFiles.serifJpBold,
+      ].filter(Boolean),
       loadSystemFonts: false,
       defaultFontFamily: 'JetBrains Mono',
     },
@@ -58,6 +90,9 @@ export const GET: RequestHandler = async (event) => {
   return new Response(new Uint8Array(pngBuffer), {
     headers: {
       'Content-Type': 'image/png',
+      'Content-Disposition': isPreview
+        ? 'inline'
+        : `attachment; filename="gitpeak-${username}-${format.id}.png"`,
       'Cache-Control': dev ? 'no-store' : 'public, max-age=3600, stale-while-revalidate=86400',
     },
   })

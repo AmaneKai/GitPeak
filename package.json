@@ -56,8 +56,9 @@
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "@tanstack/svelte-query": "^6.1.36",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.0",
     "chart.js": "^4.5.1",
-    "html-to-image": "^1.11.13",
     "lucide-svelte": "^1.0.1",
     "vanilla-colorful": "^0.7.2",
     "zod": "^4.4.3"

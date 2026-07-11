@@ -104,9 +104,5 @@
 </main>
 
 {#if showExporter && searchManager.stats}
-  <WallpaperExporter
-    stats={searchManager.stats}
-    login={searchManager.currentUsername}
-    onClose={() => (showExporter = false)}
-  />
+  <WallpaperExporter login={searchManager.currentUsername} onClose={() => (showExporter = false)} />
 {/if}

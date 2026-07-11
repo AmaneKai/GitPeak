@@ -4,11 +4,21 @@ import { PRESET_THEMES } from '$lib/theme/theme-manager'
 import ReadmeCard from '$lib/readme/ReadmeCard.svelte'
 import { buildReadmeFontStyles } from '$lib/readme/readme-font-styles'
 import { fetchAsDataUri, getReadmeFonts } from '$lib/readme/server-assets'
+import { checkRateLimit } from '$lib/server/rate-limit'
 import type { RequestHandler } from './$types'
 
 export const GET: RequestHandler = async (event) => {
   const username = event.url.searchParams.get('username')?.trim()
   if (!username) return new Response('Missing username', { status: 400 })
+
+  const rateLimit = await checkRateLimit(event.getClientAddress())
+  if (!rateLimit.success) {
+    const retryAfterSeconds = Math.max(0, Math.ceil((rateLimit.reset - Date.now()) / 1000))
+    return new Response('Too Many Requests', {
+      status: 429,
+      headers: { 'Retry-After': String(retryAfterSeconds) },
+    })
+  }
 
   const requestedTheme = event.url.searchParams.get('theme') || 'Rosé Pine'
   const theme = PRESET_THEMES[requestedTheme] || PRESET_THEMES['Rosé Pine']

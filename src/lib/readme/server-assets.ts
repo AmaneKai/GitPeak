@@ -56,24 +56,35 @@ export function getReadmeFonts(): Promise<{ mono: string; serif: string }> {
   return fontCache
 }
 
-let ogFontFileCache: Promise<{ mono: string; serif: string; jp: string }> | null = null
+let ogFontFileCache: Promise<{ mono: string; serif: string; jp: string; serifJp: string }> | null =
+  null
 
-// On-disk font files for resvg (og), which registers fonts via `font.fontFiles` paths
-// rather than resolving @font-face data URIs embedded in the SVG.
-export function getOgFontFiles(): Promise<{ mono: string; serif: string; jp: string }> {
+// On-disk font files for resvg (og, wallpaper), which registers fonts via `font.fontFiles`
+// paths rather than resolving @font-face data URIs embedded in the SVG. `serifJp` (Noto Serif
+// JP) is the CJK fallback for .text-serif specifically — pairing Instrument Serif's thin serif
+// strokes with a *sans* CJK fallback (Noto Sans JP) reads as two mismatched typefaces glued
+// together whenever a display name mixes scripts.
+export function getOgFontFiles(): Promise<{
+  mono: string
+  serif: string
+  jp: string
+  serifJp: string
+}> {
   ogFontFileCache ??= (async () => {
-    const [mono, serif, jp] = await Promise.all([
+    const [mono, serif, jp, serifJp] = await Promise.all([
       fetchFontArrayBuffer('JetBrains Mono', 400),
       fetchFontArrayBuffer('Instrument Serif', 400),
       fetchFontArrayBuffer('Noto Sans JP', 400),
+      fetchFontArrayBuffer('Noto Serif JP', 400),
     ])
 
     const entries: Array<[keyof typeof paths, ArrayBuffer | null, string]> = [
       ['mono', mono, 'gitpeak-og-jetbrains-mono.ttf'],
       ['serif', serif, 'gitpeak-og-instrument-serif.ttf'],
       ['jp', jp, 'gitpeak-og-noto-sans-jp.ttf'],
+      ['serifJp', serifJp, 'gitpeak-og-noto-serif-jp.ttf'],
     ]
-    const paths = { mono: '', serif: '', jp: '' }
+    const paths = { mono: '', serif: '', jp: '', serifJp: '' }
 
     await Promise.all(
       entries.map(async ([key, buffer, filename]) => {
@@ -88,4 +99,66 @@ export function getOgFontFiles(): Promise<{ mono: string; serif: string; jp: str
   })()
 
   return ogFontFileCache
+}
+
+export interface WallpaperFontFiles {
+  mono: string
+  bookSerif: string
+  bookSerifBold: string
+  jp: string
+  serifJp: string
+  serifJpBold: string
+}
+
+let wallpaperFontFileCache: Promise<WallpaperFontFiles> | null = null
+
+// The wallpaper matches the live dashboard's actual `font-serif` look (a plain Georgia/Times
+// book-serif — Tailwind's `font-serif` utility isn't wired to Instrument Serif there, see
+// app.css), not the README/OG card's Instrument Serif treatment. Gelasio is a Google Fonts
+// metric- and shape-compatible substitute for Georgia, so this renders the same regardless of
+// the server's OS instead of depending on whatever system serif happens to be installed.
+// Both weights are fetched for the CJK fallback too — requesting font-weight 700 text with only
+// a 400-weight CJK file registered leaves resvg unable to match that family+weight combo for
+// CJK glyphs specifically, and it falls back badly for just those characters.
+export function getWallpaperFontFiles(): Promise<WallpaperFontFiles> {
+  wallpaperFontFileCache ??= (async () => {
+    const [mono, bookSerif, bookSerifBold, jp, serifJp, serifJpBold] = await Promise.all([
+      fetchFontArrayBuffer('JetBrains Mono', 400),
+      fetchFontArrayBuffer('Gelasio', 400),
+      fetchFontArrayBuffer('Gelasio', 700),
+      fetchFontArrayBuffer('Noto Sans JP', 400),
+      fetchFontArrayBuffer('Noto Serif JP', 400),
+      fetchFontArrayBuffer('Noto Serif JP', 700),
+    ])
+
+    const entries: Array<[keyof WallpaperFontFiles, ArrayBuffer | null, string]> = [
+      ['mono', mono, 'gitpeak-wp-jetbrains-mono.ttf'],
+      ['bookSerif', bookSerif, 'gitpeak-wp-gelasio.ttf'],
+      ['bookSerifBold', bookSerifBold, 'gitpeak-wp-gelasio-bold.ttf'],
+      ['jp', jp, 'gitpeak-wp-noto-sans-jp.ttf'],
+      ['serifJp', serifJp, 'gitpeak-wp-noto-serif-jp.ttf'],
+      ['serifJpBold', serifJpBold, 'gitpeak-wp-noto-serif-jp-bold.ttf'],
+    ]
+    const paths: WallpaperFontFiles = {
+      mono: '',
+      bookSerif: '',
+      bookSerifBold: '',
+      jp: '',
+      serifJp: '',
+      serifJpBold: '',
+    }
+
+    await Promise.all(
+      entries.map(async ([key, buffer, filename]) => {
+        if (!buffer) return
+        const filePath = join(tmpdir(), filename)
+        await writeFile(filePath, Buffer.from(buffer))
+        paths[key] = filePath
+      }),
+    )
+
+    return paths
+  })()
+
+  return wallpaperFontFileCache
 }
