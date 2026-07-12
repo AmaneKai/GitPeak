@@ -56,15 +56,6 @@
       stroke-opacity="0.15"
       filter="url(#glass-shadow)"
     />
-    <rect
-      x={cardX + 1}
-      y={y + 1}
-      width={heroWidth - 2}
-      height="1"
-      rx="15"
-      fill={theme.text}
-      fill-opacity="0.06"
-    />
     <text x={cardX + 20} y={y + 34} class="text-subtle">{item.label}</text>
     <text x={cardX + 20} y={y + 80} class="text-serif" font-size="38">
       {formatNumber(item.value)}
@@ -101,15 +92,6 @@
       stroke={theme.subtle}
       stroke-opacity="0.15"
       filter="url(#glass-shadow)"
-    />
-    <rect
-      x={cardX + 1}
-      y={cardY + 1}
-      width={detailWidth - 2}
-      height="1"
-      rx="13"
-      fill={theme.text}
-      fill-opacity="0.06"
     />
     <text x={cardX + 16} y={cardY + 28} class="text-subtle" font-size="10">{item.label}</text>
     <text x={cardX + 16} y={cardY + 66} class="text-serif" font-size="26">

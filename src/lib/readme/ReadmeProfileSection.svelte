@@ -53,15 +53,6 @@
   stroke-opacity="0.15"
   filter="url(#glass-shadow)"
 />
-<rect
-  x={x + 1}
-  y={y + 1}
-  width={width - 2}
-  height="1"
-  rx="17"
-  fill={theme.text}
-  fill-opacity="0.06"
-/>
 
 <clipPath id="profile-avatar-clip">
   <rect x={avatarX} y={avatarY} width={AVATAR_SIZE} height={AVATAR_SIZE} rx="16" />

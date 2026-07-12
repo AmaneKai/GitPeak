@@ -35,15 +35,6 @@
     stroke-opacity="0.15"
     filter="url(#glass-shadow)"
   />
-  <rect
-    x={x + 1}
-    y={y + 1}
-    width={width - 2}
-    height="1"
-    rx="13"
-    fill={theme.text}
-    fill-opacity="0.06"
-  />
 {/if}
 <rect {x} {y} width="5" {height} rx="2.5" fill={theme.gold} />
 <text x={x + 24} y={y + 26} class="text-subtle">★ Top Repository</text>
