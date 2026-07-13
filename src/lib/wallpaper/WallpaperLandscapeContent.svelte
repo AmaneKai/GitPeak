@@ -4,6 +4,7 @@
   import { formatNumber } from '$lib/core/formatting/number-formatting'
   import { accountAge } from '$lib/github/models/account-age'
   import { buildThemedSlices, groupSlicesForLegend } from './language-colors'
+  import { monoNameBudget, wrapName } from '$lib/core/text/legend-fit'
   import { containsCjk } from '$lib/core/text/script-segments'
   import WallpaperDonut from './WallpaperDonut.svelte'
 
@@ -94,7 +95,7 @@
   const statColumnWidth = $derived(leftColumnWidth / 2)
 
   const topRepoValueY = $derived(bodyBottom - scaleUnit * 0.4)
-  const topRepoLabelY = $derived(topRepoValueY - scaleUnit * 2.8)
+  const topRepoLabelY = $derived(topRepoValueY - scaleUnit * 3.4)
 
   const outerRadius = $derived(scaleUnit * 16.5)
   const innerRadius = $derived(outerRadius * 0.63)
@@ -112,10 +113,30 @@
       ? Math.min(scaleUnit * 2.3, legendMaxHeight / (legendRows.length - 1))
       : 0,
   )
-  const legendStartY = $derived(donutCenterY - ((legendRows.length - 1) * legendRowStep) / 2)
   const legendFontSize = $derived(
     Math.min(scaleUnit * 1.1, Math.max(legendRowStep * 0.7, scaleUnit * 0.55)),
   )
+  // Long names ("Jupyter Notebook") wrap onto a second, tighter line instead of running into
+  // their percent label, so each row carries its own vertical offset.
+  const legendLineHeight = $derived(legendFontSize * 1.35)
+  const legendEntries = $derived.by(() => {
+    let offsetY = 0
+    return legendRows.map((row) => {
+      const lines = wrapName(
+        row.name,
+        monoNameBudget(legendWidth - scaleUnit, legendFontSize, row.percentage),
+      )
+      const entry = { ...row, lines, offsetY }
+      offsetY += legendRowStep + (lines.length - 1) * legendLineHeight
+      return entry
+    })
+  })
+  // Baseline-to-baseline height of the whole legend, wrapped lines included.
+  const legendSpan = $derived.by(() => {
+    const lastEntry = legendEntries.at(-1)
+    return lastEntry ? lastEntry.offsetY + (lastEntry.lines.length - 1) * legendLineHeight : 0
+  })
+  const legendStartY = $derived(donutCenterY - legendSpan / 2)
 </script>
 
 <text
@@ -181,8 +202,8 @@
     filterId="wp-donut-glow-ls"
   />
 
-  {#each legendRows as slice, index (slice.name)}
-    {@const rowY = legendStartY + index * legendRowStep}
+  {#each legendEntries as slice (slice.name)}
+    {@const rowY = legendStartY + slice.offsetY}
     <circle
       cx={legendX}
       cy={rowY - legendFontSize * 0.32}
@@ -190,17 +211,19 @@
       fill={slice.color}
       opacity={slice.muted ? 0.6 : 1}
     />
+    {#each slice.lines as line, lineIndex (lineIndex)}
+      <text
+        x={legendX + scaleUnit}
+        y={rowY + lineIndex * legendLineHeight}
+        class="text-main"
+        font-size={legendFontSize}
+        opacity={slice.muted ? 0.6 : 0.9}
+      >
+        {line}
+      </text>
+    {/each}
     <text
-      x={legendX + scaleUnit}
-      y={rowY}
-      class="text-main"
-      font-size={legendFontSize}
-      opacity={slice.muted ? 0.6 : 0.9}
-    >
-      {slice.name}
-    </text>
-    <text
-      x={legendX + scaleUnit * 11}
+      x={legendX + legendWidth}
       y={rowY}
       class="text-main"
       font-size={legendFontSize}
@@ -226,10 +249,10 @@
     x={columnX}
     y={labelY}
     class="text-main"
-    font-size={scaleUnit * 0.75}
+    font-size={scaleUnit * 0.95}
     letter-spacing="0.14em"
     font-weight="600"
-    style="fill:{theme.muted}"
+    opacity="0.8"
   >
     {item.label.toUpperCase()}
   </text>
@@ -251,10 +274,10 @@
     x={contentX}
     y={topRepoLabelY}
     class="text-main"
-    font-size={scaleUnit * 0.75}
+    font-size={scaleUnit * 0.95}
     letter-spacing="0.14em"
     font-weight="600"
-    style="fill:{theme.muted}"
+    opacity="0.8"
   >
     TOP REPOSITORY
   </text>

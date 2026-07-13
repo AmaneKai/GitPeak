@@ -83,7 +83,10 @@
             </span>
 
             <span
-              class="flex-1 truncate font-mono text-[11px] transition-colors"
+              class={cn(
+                'line-clamp-2 min-w-0 flex-1',
+                'font-mono text-[11px] break-words transition-colors',
+              )}
               style="font-weight: {isSliceActive ? 500 : 400};"
             >
               {slice.name}

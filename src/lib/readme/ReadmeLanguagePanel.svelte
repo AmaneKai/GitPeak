@@ -7,6 +7,7 @@
     generateArcPath,
   } from '$lib/github/ui/language-breakdown/useLanguagePie.svelte'
   import { buildSweepRevealMask } from './sweep-reveal-mask'
+  import { monoNameBudget, wrapName } from '$lib/core/text/legend-fit'
   import ReadmeTopRepo from './ReadmeTopRepo.svelte'
 
   let {
@@ -29,12 +30,20 @@
     height: number
   } = $props()
 
-  const TOP_REPO_HEIGHT = 72
   const BOTTOM_MARGIN = 20
   const DIVIDER_GAP = 24
 
-  const NAME_MAX_CHARACTERS = 13
+  const LEGEND_FONT_SIZE = 12
   const LEGEND_ROW_HEIGHT = 28
+  // Second line of a wrapped language name — tighter than the row step so the pair reads
+  // as one entry.
+  const LEGEND_LINE_HEIGHT = 16
+
+  // Instrument Serif is proportional; 0.5em per glyph is a conservative average width, so a
+  // repo name line that passes this budget can't reach the panel's right padding.
+  const REPO_NAME_FONT_SIZE = 22
+  const REPO_NAME_LINE_HEIGHT = 26
+  const SERIF_ADVANCE_EM = 0.5
   const MAX_LEGEND_ROWS = 8
   const ACCENT_TOKENS = ACCENT_COLORS.map((cssVariable) => cssVariable.slice('var(--'.length, -1))
 
@@ -55,6 +64,23 @@
   )
   const legendSlices = $derived(slices.slice(0, MAX_LEGEND_ROWS))
   const legendX = $derived(donutX + dimensions.sizePixels + 24)
+  // From the name's left edge (past the color dot) to the percent label's right anchor.
+  const legendRowWidth = $derived(x + width - 24 - (legendX + 12))
+  // Long names ("Jupyter Notebook") wrap onto a second line instead of being cut, so each
+  // row carries its own vertical offset within the legend.
+  const legendEntries = $derived.by(() => {
+    let offsetY = 0
+    return legendSlices.map((slice) => {
+      const percentage = Math.round(slice.percentage)
+      const lines = wrapName(
+        slice.name,
+        monoNameBudget(legendRowWidth, LEGEND_FONT_SIZE, percentage),
+      )
+      const entry = { ...slice, percentage, lines, offsetY }
+      offsetY += LEGEND_ROW_HEIGHT + (lines.length - 1) * LEGEND_LINE_HEIGHT
+      return entry
+    })
+  })
 
   const SWEEP_BEGIN_SECONDS = 0.4
 
@@ -75,12 +101,19 @@
     return SWEEP_BEGIN_SECONDS + linearProgress * sweepMask.durSeconds
   }
 
-  const topRepoY = $derived(y + height - BOTTOM_MARGIN - TOP_REPO_HEIGHT)
+  // A long repo name wraps onto a second line rather than colliding with anything, so the
+  // block's height (and the divider above it) follows the wrapped line count.
+  const repoNameLines = $derived(
+    mostStarredRepo
+      ? wrapName(
+          mostStarredRepo.name,
+          Math.floor((width - 72) / (REPO_NAME_FONT_SIZE * SERIF_ADVANCE_EM)),
+        )
+      : [],
+  )
+  const topRepoHeight = $derived(74 + repoNameLines.length * REPO_NAME_LINE_HEIGHT)
+  const topRepoY = $derived(y + height - BOTTOM_MARGIN - topRepoHeight)
   const dividerY = $derived(topRepoY - DIVIDER_GAP)
-
-  function truncateName(name: string): string {
-    return name.length > NAME_MAX_CHARACTERS ? `${name.slice(0, NAME_MAX_CHARACTERS - 1)}…` : name
-  }
 </script>
 
 <rect
@@ -202,24 +235,31 @@
   stroke-width="3"
 />
 
-{#each legendSlices as slice, index (slice.name)}
-  {@const rowY = donutY + index * LEGEND_ROW_HEIGHT + 10}
+{#each legendEntries as slice, index (slice.name)}
+  {@const rowY = donutY + slice.offsetY + 10}
 
   <g class="anim-row" style="animation-delay:{0.5 + index * 0.06}s">
     <circle cx={legendX} cy={rowY - 4} r="4" fill={slice.color} />
-    <text x={legendX + 12} y={rowY} class="text-main" font-size="12">
-      {truncateName(slice.name)}
-    </text>
+    {#each slice.lines as line, lineIndex (lineIndex)}
+      <text
+        x={legendX + 12}
+        y={rowY + lineIndex * LEGEND_LINE_HEIGHT}
+        class="text-main"
+        font-size={LEGEND_FONT_SIZE}
+      >
+        {line}
+      </text>
+    {/each}
     <text
       x={x + width - 24}
       y={rowY}
       class="text-main"
-      font-size="12"
+      font-size={LEGEND_FONT_SIZE}
       font-weight="600"
       fill={slice.color}
       text-anchor="end"
     >
-      {Math.round(slice.percentage)}%
+      {slice.percentage}%
     </text>
   </g>
 {/each}
@@ -236,11 +276,12 @@
   <g class="anim-row" style="animation-delay:0.9s">
     <ReadmeTopRepo
       repository={mostStarredRepo}
+      nameLines={repoNameLines}
       {theme}
       x={x + 24}
       y={topRepoY}
       width={width - 48}
-      height={TOP_REPO_HEIGHT}
+      height={topRepoHeight}
       nested
     />
   </g>

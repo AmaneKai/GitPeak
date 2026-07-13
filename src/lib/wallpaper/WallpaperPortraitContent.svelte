@@ -4,6 +4,7 @@
   import { formatNumber } from '$lib/core/formatting/number-formatting'
   import { accountAge } from '$lib/github/models/account-age'
   import { buildThemedSlices, groupSlicesForLegend } from './language-colors'
+  import { fitLegendName } from '$lib/core/text/legend-fit'
   import { containsCjk } from '$lib/core/text/script-segments'
   import WallpaperDonut from './WallpaperDonut.svelte'
 
@@ -86,7 +87,7 @@
     Math.min(scaleUnit * 1.9, Math.max(legendRowStep * 0.55, scaleUnit * 0.9)),
   )
   const legendHeight = $derived(Math.max(0, legendRowCount - 1) * legendRowStep + scaleUnit * 1.5)
-  const topRepoHeight = $derived(hasTopRepo ? scaleUnit * 13 : 0)
+  const topRepoHeight = $derived(hasTopRepo ? scaleUnit * 14 : 0)
   const statValueHeight = $derived(scaleUnit * 7.2)
   const statLabelOffset = $derived(scaleUnit * 1.8)
   const statValueOffset = $derived(scaleUnit * 8.2)
@@ -121,8 +122,8 @@
   const legendStartY = $derived(donutCenterY + outerRadius + blockGap + scaleUnit * 1.2)
   const legendEndY = $derived(legendStartY + Math.max(0, legendRowCount - 1) * legendRowStep)
   const topRepoRuleY = $derived(legendEndY + scaleUnit * 5.5)
-  const topRepoLabelY = $derived(topRepoRuleY + scaleUnit * 2.8)
-  const topRepoValueY = $derived(topRepoLabelY + scaleUnit * 3.8)
+  const topRepoLabelY = $derived(topRepoRuleY + scaleUnit * 3)
+  const topRepoValueY = $derived(topRepoLabelY + scaleUnit * 4.8)
   const statGridY = $derived(
     (hasTopRepo ? topRepoValueY + scaleUnit * 3.2 : legendEndY + scaleUnit * 1.5) + blockGap,
   )
@@ -213,7 +214,12 @@
       font-size={legendFontSize}
       opacity={slice.muted ? 0.6 : 0.9}
     >
-      {slice.name}
+      {fitLegendName(
+        slice.name,
+        slice.percentage,
+        legendColumnWidth - legendPaddingX * 2 - scaleUnit * 1.6,
+        legendFontSize,
+      )}
     </text>
     <text
       x={columnX + legendColumnWidth - legendPaddingX}
@@ -244,11 +250,11 @@
       x={contentX + contentWidth / 2}
       y={topRepoLabelY}
       class="text-main"
-      font-size={scaleUnit * 1.7}
+      font-size={scaleUnit * 2.1}
       letter-spacing="0.14em"
       font-weight="600"
       text-anchor="middle"
-      style="fill:{theme.subtle}"
+      opacity="0.8"
     >
       TOP REPOSITORY
     </text>
