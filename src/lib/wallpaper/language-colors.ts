@@ -25,7 +25,7 @@ export interface LegendGrouping {
 export function groupSlicesForLegend(
   slices: PieSlice[],
   minPercent = 3,
-  maxDisplayed = 6,
+  maxDisplayed = 7,
 ): LegendGrouping {
   const aboveThreshold = slices.filter((slice) => slice.percentage >= minPercent)
   const displayed = aboveThreshold.slice(0, maxDisplayed)
