@@ -51,6 +51,7 @@
           languages={statistics.languages}
           avatarUrl={statistics.avatarUrl}
           involvedRepos={statistics.involvedRepos}
+          collaborators={statistics.collaborators}
         />
       {/if}
 

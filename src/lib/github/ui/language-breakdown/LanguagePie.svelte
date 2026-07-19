@@ -1,15 +1,17 @@
 <script lang="ts">
-  import type { GitHubLanguage, InvolvedRepo } from '$lib/github/models/github-stats'
+  import type { GitHubLanguage, InvolvedRepo, Collaborator } from '$lib/github/models/github-stats'
   import { useLanguagePie } from './useLanguagePie.svelte'
   import { calculateOrbitNodes } from '../../models/orbit-calculations'
+  import { calculateCollaboratorOrbitNodes } from '../../models/collaborator-orbit-calculations'
   import LanguagePieChart from './LanguagePieChart.svelte'
   import RecencyOrbitChart from './RecencyOrbitChart.svelte'
+  import CollaboratorOrbitChart from '$lib/github/ui/collaborators/CollaboratorOrbitChart.svelte'
   import ChartLegend from './ChartLegend.svelte'
 
   import { Card, CardContent, CardHeader } from '$lib/components/ui/card'
   import { Tabs, TabsList, TabsTrigger } from '$lib/components/ui/tabs'
   import * as Avatar from '$lib/components/ui/avatar'
-  import { Orbit, Palette, Globe, User, Users } from 'lucide-svelte'
+  import { Orbit, Palette, Globe, User, Users, Handshake } from 'lucide-svelte'
   import { fade, scale } from 'svelte/transition'
   import * as Tooltip from '$lib/components/ui/tooltip'
 
@@ -19,17 +21,20 @@
     languages,
     avatarUrl,
     involvedRepos = [],
+    collaborators = [],
   }: {
     languages: GitHubLanguage[]
     avatarUrl: string
     involvedRepos?: InvolvedRepo[]
+    collaborators?: Collaborator[]
   } = $props()
 
-  let viewMode = $state<'languages' | 'orbit'>('languages')
+  let viewMode = $state<'languages' | 'orbit' | 'collaborators'>('languages')
   let ownershipFilter = $state<'all' | 'owned' | 'others'>('all')
   let hoveredIndex = $state<number | null>(null)
 
   const pieManager = useLanguagePie(() => languages)
+  const hasCollaborators = $derived(collaborators.length > 0)
 
   const filteredRepos = $derived.by(() => {
     if (viewMode === 'languages') return involvedRepos
@@ -49,6 +54,16 @@
     ),
   )
 
+  const collaboratorOrbitNodes = $derived(
+    calculateCollaboratorOrbitNodes(
+      collaborators,
+      pieManager.dimensions.centerX,
+      pieManager.dimensions.centerY,
+      pieManager.dimensions.innerRadiusPixels,
+      pieManager.dimensions.outerRadiusPixels,
+    ),
+  )
+
   const activeThemeColor = $derived.by(() => {
     if (viewMode === 'orbit' && hoveredIndex !== null)
       return orbitNodes[hoveredIndex]?.languageColor || 'var(--iris)'
@@ -56,11 +71,20 @@
     if (viewMode === 'languages' && hoveredIndex !== null)
       return pieManager.slices[hoveredIndex]?.color || 'var(--iris)'
 
+    if (viewMode === 'collaborators' && hoveredIndex !== null)
+      return collaboratorOrbitNodes[hoveredIndex]?.accentColor || 'var(--iris)'
+
     return 'var(--iris)'
   })
 
   const buttonSize = $derived((pieManager.dimensions.innerRadiusPixels - 3.5) * 2)
   const buttonOffset = $derived((pieManager.dimensions.sizePixels - buttonSize) / 2)
+
+  function cycleViewMode() {
+    if (viewMode === 'languages') viewMode = 'orbit'
+    else if (viewMode === 'orbit') viewMode = hasCollaborators ? 'collaborators' : 'languages'
+    else viewMode = 'languages'
+  }
 </script>
 
 {#snippet ownershipToggle()}
@@ -122,7 +146,11 @@
   <CardHeader class="p-4 pb-0 sm:p-5">
     <div class="flex items-center justify-between gap-2">
       <span class="text-subtle font-mono text-[10px] tracking-widest uppercase">
-        {viewMode === 'languages' ? 'Languages' : 'Recency Orbit'}
+        {viewMode === 'languages'
+          ? 'Languages'
+          : viewMode === 'orbit'
+            ? 'Recency Orbit'
+            : 'Collaborators'}
       </span>
 
       <Tabs value={viewMode} onValueChange={(value) => (viewMode = value as typeof viewMode)}>
@@ -135,6 +163,12 @@
             <Orbit size={10} class="mr-1" />
             Orbit
           </TabsTrigger>
+          {#if hasCollaborators}
+            <TabsTrigger value="collaborators" class="h-6 px-2.5 font-mono text-[9px]">
+              <Handshake size={10} class="mr-1" />
+              Collab
+            </TabsTrigger>
+          {/if}
         </TabsList>
       </Tabs>
     </div>
@@ -177,9 +211,18 @@
               innerRadiusPixels={pieManager.dimensions.innerRadiusPixels}
               outerRadiusPixels={pieManager.dimensions.outerRadiusPixels}
             />
-          {:else}
+          {:else if viewMode === 'orbit'}
             <RecencyOrbitChart
               {orbitNodes}
+              bind:hoveredIndex
+              centerX={pieManager.dimensions.centerX}
+              centerY={pieManager.dimensions.centerY}
+              innerRadiusPixels={pieManager.dimensions.innerRadiusPixels}
+              outerRadiusPixels={pieManager.dimensions.outerRadiusPixels}
+            />
+          {:else}
+            <CollaboratorOrbitChart
+              orbitNodes={collaboratorOrbitNodes}
               bind:hoveredIndex
               centerX={pieManager.dimensions.centerX}
               centerY={pieManager.dimensions.centerY}
@@ -203,7 +246,7 @@
 
         <button
           type="button"
-          onclick={() => (viewMode = viewMode === 'languages' ? 'orbit' : 'languages')}
+          onclick={cycleViewMode}
           class={cn(
             'bg-base group absolute flex cursor-pointer items-center',
             'justify-center overflow-hidden rounded-full border-none',
@@ -248,7 +291,13 @@
       {/if}
 
       <div class="w-full sm:w-64">
-        <ChartLegend {viewMode} slices={pieManager.slices} {orbitNodes} bind:hoveredIndex />
+        <ChartLegend
+          {viewMode}
+          slices={pieManager.slices}
+          {orbitNodes}
+          collaboratorNodes={collaboratorOrbitNodes}
+          bind:hoveredIndex
+        />
       </div>
     </div>
   </CardContent>

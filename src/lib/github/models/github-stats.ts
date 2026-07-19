@@ -22,6 +22,22 @@ export const mostStarredRepoSchema = z.object({
   url: z.string(),
 })
 
+export const collaboratorRepoSchema = z.object({
+  name: z.string(),
+  owner: z.string(),
+  url: z.string(),
+  commits: z.number(),
+  lastActivityAt: z.string(),
+})
+
+export const collaboratorSchema = z.object({
+  login: z.string(),
+  avatarUrl: z.string(),
+  sharedRepos: z.number(),
+  commits: z.number(),
+  repos: z.array(collaboratorRepoSchema),
+})
+
 export const githubStatsSchema = z.object({
   displayName: z.string().nullable(),
   avatarUrl: z.string(),
@@ -32,6 +48,7 @@ export const githubStatsSchema = z.object({
   languages: z.array(gitHubLanguageSchema),
   involvedRepos: z.array(involvedRepoSchema),
   mostStarredRepo: mostStarredRepoSchema.nullable(),
+  collaborators: z.array(collaboratorSchema).default([]),
   totalContributions: z.number(),
   totalCommits: z.number(),
   totalStars: z.number(),
@@ -43,4 +60,6 @@ export const githubStatsSchema = z.object({
 export type GitHubLanguage = z.infer<typeof gitHubLanguageSchema>
 export type InvolvedRepo = z.infer<typeof involvedRepoSchema>
 export type MostStarredRepo = z.infer<typeof mostStarredRepoSchema>
+export type CollaboratorRepo = z.infer<typeof collaboratorRepoSchema>
+export type Collaborator = z.infer<typeof collaboratorSchema>
 export type GithubStats = z.infer<typeof githubStatsSchema>
